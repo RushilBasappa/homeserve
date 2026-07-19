@@ -155,16 +155,21 @@ EXTERNAL_UDP_51820=open make preflight     # or =closed if unreachable
 (`100.64.0.0/10`), external UDP-51820 reachability, `vpn.ragnaforge.xyz`
 resolution. Inconclusive ⇒ NO-GO (never a false GO).
 
-**Record the verdict here — it selects Step 7's path:**
+**Verdict recorded (2026-07-19):**
 
 | Field | Value |
 |---|---|
-| Date run | _<fill>_ |
-| Public IP | _<fill>_ |
-| CGNAT? | _<fill>_ |
-| External UDP 51820 | _<fill>_ |
-| Verdict | **GO** / **NO-GO** _(circle one)_ |
-| Chosen path | direct port-forward / cloud relay |
+| Date run | 2026-07-19 |
+| Public IP | `76.102.108.83` |
+| CGNAT? | **No** — routable public Xfinity address (not in `100.64.0.0/10`) |
+| External UDP 51820 | pending — needs the xFi port-forward + an external probe |
+| Verdict | **GO (direct path)** — the CGNAT gate passed; a home port-forward is feasible |
+| Chosen path | **direct port-forward** (no VPS relay needed) |
+
+The script printed a conservative NO-GO only because checks 2–3 weren't set up yet
+(nothing forwarded; `vpn` still resolved to the Tailscale IP from the wildcard). Both
+are pending setup, not failures. Path = **direct**: deploy DDNS (Step 5) → forward
+UDP 51820 → re-run `EXTERNAL_UDP_51820=open make preflight` to confirm.
 
 ## 7. wg-easy — the secondary VPN (US8 → Scenarios 6 & 7)
 

@@ -170,7 +170,7 @@ external UDP-51820 reachability, DDNS resolution); inconclusive ⇒ NO-GO (no fa
 
 - [X] T025 [US7] Create `scripts/preflight-public-endpoint.sh`: fetch external IP, flag CGNAT (`100.64.0.0/10` / external-IP mismatch), probe external UDP 51820, check `vpn.ragnaforge.xyz` resolves; emit a single GO/NO-GO with reason; inconclusive ⇒ NO-GO (research R7; FR-021)
 - [X] T026 [US7] Add a `make preflight` target invoking the script; document how to run the external-vantage probe (phone hotspot / external checker) in `docs/runbooks/phase3-edge.md`
-- [ ] T027 [US7] ⏳ **operator** — Run `make preflight` and **record the verdict** in the runbook — it selects the direct-forward (GO) or cloud-relay (NO-GO) path for Phase 10 (quickstart Scenario 0; SC-013)
+- [X] T027 [US7] ✅ **run 2026-07-19** — public IP `76.102.108.83`, **not CGNAT** → **direct path** viable (no relay). Verdict recorded in the runbook. External UDP-51820 probe still pending (needs xFi forward + off-net probe). Original — Run `make preflight` and **record the verdict** in the runbook — it selects the direct-forward (GO) or cloud-relay (NO-GO) path for Phase 10 (quickstart Scenario 0; SC-013)
 
 **Checkpoint**: the go/no-go for public exposure is known and recorded.
 
