@@ -53,7 +53,30 @@ What this does:
 **Checkpoint:** `traefik` network exists; `sudo ss -lunp | grep :53` shows nothing
 bound; `sysctl net.ipv4.ip_forward` = 1.
 
-## 1. Traefik + wildcard cert (US3 → quickstart Scenario 1)
+## Deploying edge stacks from Komodo (read once)
+
+Each edge stack is deployed from Komodo Core (git source of truth). Bring-up
+findings (2026-07-19), so future deploys are smooth:
+
+- **Core caches the repo and does NOT auto-fetch new commits.** After pushing a
+  stack change, Core keeps serving the old commit until its poll cycle. To force
+  it now: run the `homeserve` ResourceSync (Komodo UI → Syncs → Execute, or API
+  `RunSync`), which reconciles `komodo/stacks.toml` and refreshes the clone.
+  (First import of the Phase-3 stacks was done this way.) _TODO: enable repo
+  polling or a git webhook on the sync so this is automatic._
+- **Secrets must be forwarded** in `komodo/bootstrap/periphery.compose.yaml`'s
+  `environment:` (see that file), then `make sync-secrets` **and recreate
+  Periphery** (`mise exec -- docker compose -f komodo/bootstrap/periphery.compose.yaml up -d`)
+  so the new env is live. `${VAR}` in a stack resolves from the Periphery agent env.
+- **No host bind mounts for config** — Komodo's compose project dir doesn't
+  resolve repo-relative paths; Docker then creates an empty dir. Ship config as
+  CLI flags or an inline compose `configs: content:` block (see `stacks/traefik/`).
+
+## 1. Traefik + wildcard cert (US3 → quickstart Scenario 1) ✅ done 2026-07-19
+
+> **Delivered:** Traefik v3 deployed from Core; LE wildcard `*.ragnaforge.xyz`
+> issued via Cloudflare DNS-01, persisted (acme.json 0600), reused on restart;
+> `https://whoami.ragnaforge.xyz` trusted + 200; HTTP→HTTPS 301; unclaimed → 404.
 
 Deploy `traefik` from Komodo Core (fresh `traefik-acme` volume).
 

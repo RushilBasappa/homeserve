@@ -86,7 +86,7 @@ LE-issued `*.ragnaforge.xyz` cert unattended; a restart does **not** re-issue.
 - [X] T008 [US3] Add Traefik static config `stacks/traefik/traefik.yaml` (or CLI args): entryPoints `web`/`websecure`, Docker provider (exposedByDefault=false), and a `certificatesResolvers` using `dnsChallenge` provider `cloudflare` requesting wildcard `main: ragnaforge.xyz`, `sans: *.ragnaforge.xyz` (research R2; contract `tls-certificate-contract.md`)
 - [X] T009 [US3] Add the global HTTP→HTTPS redirect (entryPoint `web` redirection to `websecure`) via static config or `stacks/traefik/dynamic/redirect.yaml` (research R1; FR-004)
 - [X] T010 [US3] Declare the traefik stack in `komodo/stacks.toml` (`[[stack]]` → `server = "ragnaforge-dell"`, `file_paths=["stacks/traefik/compose.yaml"]`, `webhook_enabled=false`) (FR-013; data-model §11)
-- [ ] T011 [US3] ⏳ **operator** — Deploy traefik from Komodo Core; verify the wildcard cert issues (logs; `acme.json` present, perms `0600`), restart the stack and confirm **no** re-issuance (quickstart Scenario 1; SC-007)
+- [X] T011 [US3] ✅ **verified 2026-07-19** — Deployed traefik from Komodo Core; wildcard `*.ragnaforge.xyz` issued via Cloudflare DNS-01 (LE, acme.json 0600/16KB), restart reused it (no re-issue). Original — Deploy traefik from Komodo Core; verify the wildcard cert issues (logs; `acme.json` present, perms `0600`), restart the stack and confirm **no** re-issuance (quickstart Scenario 1; SC-007)
 
 **Checkpoint**: wildcard cert live and persisted; the proxy is ready to route.
 
@@ -103,8 +103,8 @@ warning; `http://` redirects; an unclaimed host returns 404. (SC-001/006; contra
 hosts-file/`--resolve` override; US4 makes it seamless.
 
 - [X] T012 [US1] Add the canonical Traefik labels to `stacks/whoami/compose.yaml` (router/service = `whoami`, `Host(\`whoami.ragnaforge.xyz\`)`, `entrypoints=websecure`, `tls=true`, `server.port=80`) and attach the `traefik` network; remove any host `ports:` (research R1; contract `edge-routing-contract.md`)
-- [ ] T013 [US1] ⏳ **operator** — Redeploy `whoami` from Komodo; with a temporary `whoami.ragnaforge.xyz → 10.0.0.70` hosts override, verify HTTPS loads with the wildcard cert (no warning) within ~30 s (quickstart Scenario 3; SC-002)
-- [ ] T014 [US1] ⏳ **operator** — Verify `http://whoami.ragnaforge.xyz` redirects to `https://`, and `https://nope.ragnaforge.xyz` returns a clear 404 (not a wrong app) (SC-006)
+- [X] T013 [US1] ✅ **verified 2026-07-19** — whoami deployed to the Dell; `https://whoami.ragnaforge.xyz` served over the trusted wildcard (ssl_verify_result=0, HTTP 200). Original — Redeploy `whoami` from Komodo; with a temporary `whoami.ragnaforge.xyz → 10.0.0.70` hosts override, verify HTTPS loads with the wildcard cert (no warning) within ~30 s (quickstart Scenario 3; SC-002)
+- [X] T014 [US1] ✅ **verified 2026-07-19** — HTTP→HTTPS redirect (301) and unclaimed host → 404 both confirmed. Original — Verify `http://whoami.ragnaforge.xyz` redirects to `https://`, and `https://nope.ragnaforge.xyz` returns a clear 404 (not a wrong app) (SC-006)
 
 **Checkpoint**: an app is reachable by friendly HTTPS name.
 
