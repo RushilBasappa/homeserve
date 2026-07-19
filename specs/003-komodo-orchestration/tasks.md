@@ -20,21 +20,26 @@ verified independently.
 
 ## Implementation status (2026-07-19)
 
-All **authorable artifacts** are complete and locally verified: the bootstrap
-compose files, `make` targets, git-declared resources (`servers.toml`,
-`stacks.toml`, `variables.toml`), the `whoami` test stack, the secret
-placeholders, the runbook, and the README entry. Syntax (YAML/TOML) validates and
-the secret-free / resource-declaration grep checks pass (T018 + the scriptable
-part of T022).
+**Live on the two real hosts.** Komodo Core (v2.2.0) runs on the Dell, Periphery
+on both nodes; the fleet is git-synced via ResourceSync, both servers report
+healthy, and the `whoami` test stack deploys to the Mac from Core alone. The
+secret-injection path is confirmed on the **primary** route
+(`mise → Periphery env → ${VAR}`) — the `[[VAR]]` fallback was **not** needed
+(T017 resolved). As-built steps and deviations are captured in
+[`docs/runbooks/phase2-komodo.md`](../../docs/runbooks/phase2-komodo.md#as-built-notes--first-live-bring-up-2026-07-19).
 
-The remaining tasks are **⏸ BLOCKED — live bring-up**: they require the two real
-nodes (`ragnaforge-dell`, `ragnaforge-mac`) plus a running Komodo Core and cannot
-be executed from the authoring environment. Follow
-[`docs/runbooks/phase2-komodo.md`](../../docs/runbooks/phase2-komodo.md) to run
-them on the hosts. Blocked: **T007, T009, T012, T014, T016, T017, T019, T020,
-T023**, and the host-dependent portion of **T022** (Core reachability, agent
-health, on-target-node placement — the grep-based conformance checks already
-pass).
+**Done:** T001–T013, T015–T018, T021, T024, and the MVP (US1) + secret path (US3).
+
+**Remaining:** **T014** (US2 git-source-of-truth re-sync proof), **T019/T020**
+(US4 manual-default + per-stack webhook), **T023** (node-independence SC-005 +
+state-persistence SC-006 scenarios), and finishing **T022** (host-dependent
+conformance — Core reachable/LAN-only, agents healthy, placement — all observed
+green during bring-up; to be recorded formally).
+
+**As-built key deviations:** Periphery serves **https** on :8120 (not http);
+nodes needed **mise installed + repo cloned + `.mise.toml` copied**; first admin
+needed a **temporary registration toggle**; the ResourceSync + deploys were driven
+via the **Komodo API**; and `git_account` must be **omitted** for the public repo.
 
 ## Format: `[ID] [P?] [Story] Description`
 
@@ -73,9 +78,9 @@ exists.
 - [X] T004 [P] Create `komodo/bootstrap/core.env.example`: **non-secret** Core config (host/base URL, DB name, disable-registration toggle); real secrets come from `.mise.toml` via `mise`, never this file (research R7)
 - [X] T005 [P] Create `komodo/bootstrap/periphery.compose.yaml`: `ghcr.io/moghtech/komodo-periphery:2`, mount `/var/run/docker.sock`, expose `8120`, mount working dirs for the pulled repo/stacks (research R2, R3; data-model "Node Agent")
 - [X] T006 Extend the root `Makefile` with `komodo-core` (bring up Core on the Dell via `mise exec -- docker compose ...`) and `komodo-periphery` (bring up the agent on a node) targets (research R3; contracts/orchestration-contract.md) — depends on T003, T005
-- [ ] T007 Bootstrap the control plane: run `make komodo-core` on the Dell and `make komodo-periphery` on **each** node; create the single admin user in Core and **disable open registration** (research R3, R7; FR-001, FR-009) — depends on T006
+- [X] T007 Bootstrap the control plane: run `make komodo-core` on the Dell and `make komodo-periphery` on **each** node; create the single admin user in Core and **disable open registration** (research R3, R7; FR-001, FR-009) — depends on T006
 - [X] T008 [P] Create `komodo/servers.toml`: `[[server]]` for `ragnaforge-dell` (`http://10.0.0.70:8120`) and `ragnaforge-mac` (`http://10.0.0.71:8120`), `enabled = true` (research R5; data-model "Server"; FR-002, FR-003)
-- [ ] T009 Configure a Komodo **ResourceSync** in Core pointing at this git repo's `komodo/` TOML, run the initial sync, and confirm **both** servers register and report **healthy** (research R5; FR-002, FR-003; quickstart 2–3) — depends on T007, T008
+- [X] T009 Configure a Komodo **ResourceSync** in Core pointing at this git repo's `komodo/` TOML, run the initial sync, and confirm **both** servers register and report **healthy** (research R5; FR-002, FR-003; quickstart 2–3) — depends on T007, T008
 
 **Checkpoint**: Control plane up, both agents healthy, fleet git-synced.
 
@@ -94,7 +99,7 @@ logs are visible centrally.
 
 - [X] T010 [P] [US1] Create `stacks/whoami/compose.yaml`: a trivial **stateless** `traefik/whoami` service (no host ports, no volumes, no state), per the naming conventions (research R8; docs/CONVENTIONS.md)
 - [X] T011 [US1] Declare the stack in `komodo/stacks.toml`: `[[stack]]` name `whoami`, `stack.config.server` targeting a node, `file_paths = ["stacks/whoami/compose.yaml"]`, repo = this repo (research R5; data-model "Stack"; FR-004) — needs registered servers (T009)
-- [ ] T012 [US1] Sync + deploy `whoami` to the chosen node from Core; verify it runs on **that** node and NOT the other, and its status + logs are visible centrally (FR-004, FR-005; SC-001; quickstart 4) — depends on T010, T011
+- [X] T012 [US1] Sync + deploy `whoami` to the chosen node from Core; verify it runs on **that** node and NOT the other, and its status + logs are visible centrally (FR-004, FR-005; SC-001; quickstart 4) — depends on T010, T011
 
 **Checkpoint**: A stack deploys to a chosen node from Core alone — MVP orchestration complete.
 
@@ -129,8 +134,8 @@ injected from the `mise` env and that a `grep` over the tree finds no real value
 ### Implementation for User Story 3
 
 - [X] T015 [US3] Add a secret env var to `stacks/whoami/compose.yaml` referenced as `${WHOAMI_TEST_SECRET}`, and add its placeholder to `.mise.toml.example`; ensure the value is in **no** tracked file (research R4; FR-006) — edits `stacks/whoami/compose.yaml` + `.mise.toml.example`
-- [ ] T016 [US3] Wire secret delivery: render the secret from `mise` into the **Periphery process environment** (its bootstrap env) so the Periphery-run compose resolves `${VAR}`; deploy and confirm the value reaches the container (research R4; SC-003; quickstart 5) — depends on T015
-- [ ] T017 [US3] Bench-validate the `mise → Periphery env → ${VAR}` path; **if** Periphery does not forward its env into compose, switch to the Komodo **secret-Variable `[[VAR]]` fallback** (seed once from the `mise` env, redacted on export) and document which path is used (research R4 flagged risk) — depends on T016
+- [X] T016 [US3] Wire secret delivery: render the secret from `mise` into the **Periphery process environment** (its bootstrap env) so the Periphery-run compose resolves `${VAR}`; deploy and confirm the value reaches the container (research R4; SC-003; quickstart 5) — depends on T015
+- [X] T017 [US3] Bench-validate the `mise → Periphery env → ${VAR}` path; **if** Periphery does not forward its env into compose, switch to the Komodo **secret-Variable `[[VAR]]` fallback** (seed once from the `mise` env, redacted on export) and document which path is used (research R4 flagged risk) — depends on T016
 - [X] T018 [US3] Run the secret-free `grep` over `komodo/` + `stacks/` and confirm **zero** real secret values (only `${VAR}`/`[[VAR]]` references) (FR-006; SC-003; contracts/resource-sync-contract.md)
 
 **Checkpoint**: Secrets reach stacks with nothing sensitive in git.

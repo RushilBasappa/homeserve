@@ -55,3 +55,9 @@ KOMODO_PASSKEY        = "changeme-komodo-passkey"
 # value injected into the whoami test stack as ${WHOAMI_TEST_SECRET} to prove a
 # secret reaches a container with no value in git. Safe to delete after Phase 2.
 WHOAMI_TEST_SECRET    = "changeme-whoami-demo-secret"
+
+# Komodo API key + secret for driving Core from the CLI/API (create under
+# Settings -> Profile -> API Keys). Operational convenience — real values go in
+# the gitignored .mise.toml, never here.
+KOMODO_API_KEY        = "changeme-komodo-api-key"
+KOMODO_API_SECRET     = "changeme-komodo-api-secret"

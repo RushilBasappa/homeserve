@@ -218,3 +218,84 @@ Adding or removing a node is a **config change**, not a re-architecture:
 Contracts: [orchestration-contract.md](../../specs/003-komodo-orchestration/contracts/orchestration-contract.md),
 [resource-sync-contract.md](../../specs/003-komodo-orchestration/contracts/resource-sync-contract.md).
 Scenario list: [quickstart.md](../../specs/003-komodo-orchestration/quickstart.md).
+
+---
+
+## As-built notes — first live bring-up (2026-07-19)
+
+What actually happened on the real hosts, including deviations from the idealized
+steps above. Follow these for a faithful reproduction.
+
+### Node prep — mise was NOT pre-installed
+
+The bring-up assumes `mise` + `.mise.toml` + the repo already on each node; on the
+Phase-1 hosts they were not. Per node (Dell + Mac):
+
+```sh
+curl -fsSL https://mise.run | sh                                  # install mise
+git clone https://github.com/RushilBasappa/homeserve.git ~/homeserve
+# Copy the filled-in .mise.toml from your workstation to each node (it is
+# gitignored, so it is not in the clone). Secrets must be ON the node because
+# compose runs there. Example (pipe over ssh to avoid scp path quirks):
+#   ssh <node> 'cat > ~/homeserve/.mise.toml' < .mise.toml
+cd ~/homeserve && ~/.local/bin/mise trust
+```
+
+`KOMODO_PASSKEY` and `WHOAMI_TEST_SECRET` must be **identical** across nodes. We
+also reset `ANSIBLE_BECOME_PASSWORD` to a placeholder in each node's copy (Komodo
+doesn't use it — no reason to store the sudo password on the nodes it protects).
+Because the `make` targets call `mise exec`, run them with mise on PATH, e.g.
+`export PATH="$HOME/.local/bin:$PATH"` first (or invoke
+`mise exec -- docker compose -f komodo/bootstrap/<file> up -d` directly).
+
+### Periphery serves HTTPS (see the as-built note in §3)
+
+Server addresses are `https://<ip>:8120`, not http.
+
+### First admin — temporary registration toggle
+
+Core ships `KOMODO_DISABLE_USER_REGISTRATION=true`, which blocks the very first
+registration. We flipped it to `false` in `komodo/bootstrap/core.env`, recreated
+Core (`docker compose ... up -d --force-recreate core`), registered the admin in
+the browser, then flipped it back to `true` and recreated Core again.
+
+### Core is HTTP-only on :9120; API-key copy needs a secure context
+
+`https://10.0.0.70:9120` resets — Core's own TLS is Phase 3; use `http://`. The
+API-key **Copy** button needs a secure-context origin (HTTPS or `localhost`). An
+`ssh -N -L 9120:localhost:9120 ragnaforge-dell` tunnel (browse `http://localhost:9120`)
+is the intended workaround, **but it did not make the copy button work in
+practice — the key had to be read out of the page via browser DevTools ("Inspect")
+instead.** Whatever the method, put the key + secret in the workstation's
+gitignored `.mise.toml` as `KOMODO_API_KEY` / `KOMODO_API_SECRET`.
+
+### ResourceSync + deploy were driven via the API (not the UI)
+
+With the API key in `mise`, from the workstation (which can reach Core on the LAN):
+
+```sh
+api() { mise exec -- sh -c "curl -s -H \"X-Api-Key: \$KOMODO_API_KEY\" \
+  -H \"X-Api-Secret: \$KOMODO_API_SECRET\" -H 'Content-Type: application/json' \
+  -d '$1' http://10.0.0.70:9120/$2"; }
+
+api '{"type":"CreateResourceSync","params":{"name":"homeserve","config":{"repo":"RushilBasappa/homeserve","branch":"main","git_provider":"github.com","git_https":true,"resource_path":["komodo"]}}}' write
+api '{"type":"RunSync","params":{"sync":"homeserve"}}' execute       # registers both servers + creates whoami
+api '{"type":"DeployStack","params":{"stack":"whoami"}}' execute     # deploys to the Mac
+```
+
+Read state with `ListServers` / `ListStacks` / `GetUpdate` on `/read`.
+
+### Gotcha — `git_account` on a public repo breaks the deploy
+
+The first deploy failed: *"Did not find token in config for git account
+RushilBasappa | domain github.com."* Setting `git_account` makes Komodo require a
+git **token** even for a **public** repo. Fix: **omit `git_account`** in
+`komodo/stacks.toml` so Komodo clones anonymously. (Re-add it only if the repo is
+made private, together with a Git Account/token in Core.)
+
+### Result — secret path confirmed on the PRIMARY route
+
+`WHOAMI_TEST_SECRET` reached the container through
+`mise → Periphery process env → ${VAR}` — **the `[[VAR]]` fallback was not
+needed** (resolves the research R4 / task T017 open risk). whoami ran on the Mac
+only; both servers healthy; state visible centrally.
