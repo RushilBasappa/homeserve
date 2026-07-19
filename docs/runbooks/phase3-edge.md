@@ -58,12 +58,15 @@ bound; `sysctl net.ipv4.ip_forward` = 1.
 Each edge stack is deployed from Komodo Core (git source of truth). Bring-up
 findings (2026-07-19), so future deploys are smooth:
 
-- **Core caches the repo and does NOT auto-fetch new commits.** After pushing a
-  stack change, Core keeps serving the old commit until its poll cycle. To force
-  it now: run the `homeserve` ResourceSync (Komodo UI → Syncs → Execute, or API
-  `RunSync`), which reconciles `komodo/stacks.toml` and refreshes the clone.
-  (First import of the Phase-3 stacks was done this way.) _TODO: enable repo
-  polling or a git webhook on the sync so this is automatic._
+- **Core polls git every 5 min** (`KOMODO_RESOURCE_POLL_INTERVAL=5-min` in
+  `core.env`; Komodo's default was 1-hr, which served stale commits long after a
+  push). So after `git push`, wait ≤5 min and Core's view is current — a
+  `DeployStack` then uses the latest code. To pick up a push immediately, run the
+  `homeserve` ResourceSync (Komodo UI → Syncs → Execute, or API `RunSync`), which
+  reconciles `komodo/stacks.toml` and refreshes the clone. RunSync is required
+  when `stacks.toml` itself changed (new/removed/retargeted stack); a plain code
+  change to an existing stack just needs Deploy. Polling refreshes the VIEW only —
+  deploys stay deliberate (each stack `webhook_enabled=false`).
 - **Secrets must be forwarded** in `komodo/bootstrap/periphery.compose.yaml`'s
   `environment:` (see that file), then `make sync-secrets` **and recreate
   Periphery** (`mise exec -- docker compose -f komodo/bootstrap/periphery.compose.yaml up -d`)
