@@ -204,8 +204,10 @@ Tailscale identity and confirm the two nodes can reach each other over the tailn
 - **FR-005**: The runbook MUST order steps so verification precedes any wipe/
   reinstall, and MUST document restoring the preserved data after provisioning.
 - **FR-006**: Removal of the incumbent k3s MUST be handled by the one-time
-  migration (via the fresh OS install) and documented in the runbook; it MUST NOT
-  be part of the reproducible provisioning automation.
+  migration — either via a fresh OS install or an equivalent one-time in-place
+  teardown (as-built: `scripts/cleanup-*.sh`, which removes k3s/Docker/data while
+  preserving SSH) — and documented in the runbook; it MUST NOT be part of the
+  reproducible provisioning automation.
 
 **Reproducible provisioning (US2)**
 

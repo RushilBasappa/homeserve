@@ -30,8 +30,12 @@ automation.
 ## Technical Context
 
 **Language/Version**: No application language. Infrastructure-as-config: Ansible
-(YAML playbooks) targeting Debian 12 (bookworm) hosts, driven by a `make`
-target. `mise` (from Phase 0) renders secrets into the environment.
+(YAML playbooks) targeting Debian hosts (as-built: **13 "trixie"**; the playbook
+avoids version-specific hacks so 12 "bookworm" also works), driven by a `make`
+target. `mise` (from Phase 0) renders secrets into the environment. Ansible
+config (`ansible.cfg`) pins `interpreter_python = auto_silent` and quiets
+third-party deprecation noise; collection deps are declared in
+`provision/requirements.yml` and installed by `make deps`.
 
 **Primary Dependencies**: Ansible (control node, agentless over SSH); Docker
 Engine + `nfs-kernel-server`/`nfs-common` + Tailscale installed on the hosts from
@@ -46,9 +50,10 @@ reads/writes the Dell's NFS export, `sysctl net.ipv4.ip_forward` reads `1`,
 Tailscale reports both nodes up, and a `grep` confirms the automation contains no
 preservation/teardown/reinstall steps. Captured in `quickstart.md`.
 
-**Target Platform**: Two Intel laptops running freshly installed Debian 12 —
-`ragnaforge-dell` (10.0.0.70, data + compute) and `ragnaforge-mac` (10.0.0.71,
-stateless compute) — reachable over SSH on the LAN `10.0.0.0/24`.
+**Target Platform**: Two Intel laptops running freshly installed Debian
+(13 "trixie" as-built) — `ragnaforge-dell` (10.0.0.70, data + compute) and
+`ragnaforge-mac` (10.0.0.71, stateless compute) — reachable over SSH on the LAN
+`10.0.0.0/24`.
 
 **Project Type**: Infrastructure/documentation monorepo. Provisioning lives in
 `provision/`; the one-time runbook lives in `docs/runbooks/`; the entry point is a
@@ -62,8 +67,10 @@ re-runnable.
 tree (FR-014). Idempotent (FR-013). Provisioning assumes a fresh OS + SSH and
 must contain **zero** one-time migration steps (FR-008, FR-016, SC-008). Each
 node provisionable independently (FR-015). No real secret in any tracked file —
-secrets come from `.mise.toml` via `mise` (Phase 0 pattern). Zero data loss
-across the migration (SC-001).
+secrets come from `.mise.toml` via `mise` (Phase 0 pattern); as-built there are
+two: `TAILSCALE_AUTHKEY` (enrollment) and `ANSIBLE_BECOME_PASSWORD` (the admin
+user's sudo password, so `make provision` escalates non-interactively). Zero data
+loss across the migration (SC-001).
 
 **Scale/Scope**: 2 nodes; ~5 task groups (docker, nfs, sysctl, ssh-baseline,
 tailscale); one static inventory; one Makefile; one migration runbook. Grows as
@@ -117,24 +124,29 @@ specs/002-host-provisioning/
 
 ```text
 homeserve/
-├── Makefile                       # NEW: `make provision` (+ per-node, + check) entry point
+├── Makefile                       # NEW: `make deps` + `make provision` (+ per-node, + check)
+├── ansible.cfg                    # NEW: interpreter_python=auto_silent; quiets 3rd-party deprecations
 ├── provision/                     # Ansible (dir + README exist from Phase 0)
-│   ├── README.md                  # exists
+│   ├── README.md                  # updated to the shipped layout
 │   ├── inventory.yml              # NEW: ragnaforge-dell, ragnaforge-mac
 │   ├── playbook.yml               # NEW: applies the task groups per host role
+│   ├── requirements.yml           # NEW: Ansible collections (ansible.posix), via `make deps`
 │   ├── group_vars/
-│   │   └── all.yml                # NEW: non-secret vars (admin user, SSH public key, NFS paths)
+│   │   └── all.yml                # NEW: connection + non-secret vars; become-pass via env lookup
 │   └── tasks/                     # NEW: lean, readable task files
 │       ├── docker.yml             #   Docker Engine via official apt repo
-│       ├── nfs-server.yml         #   Dell: nfs-kernel-server + export /srv/nfs
+│       ├── nfs-server.yml         #   Dell: nfs-kernel-server + export /srv/nfs (admin-owned)
 │       ├── nfs-client.yml         #   Mac: nfs-common + systemd-automount mount
 │       ├── sysctl.yml             #   ip_forward drop-in (Dell / router node)
 │       ├── ssh-baseline.yml       #   admin user + authorized key + sshd hardening
 │       └── tailscale.yml          #   install + enroll (idempotent) via TAILSCALE_AUTHKEY
+├── scripts/                       # NEW: one-time teardown helpers (NOT reusable provisioning)
+│   ├── cleanup-node.sh            #   destructive in-place wipe of a node (k3s/Docker/data), keeps SSH
+│   └── cleanup-all.sh             #   run cleanup-node.sh on both hosts over ssh
 ├── docs/
 │   └── runbooks/
-│       └── phase1-migration.md    # NEW: one-time preserve → reinstall → restore runbook
-└── .mise.toml.example             # exists — TAILSCALE_AUTHKEY already present; no new secret needed
+│       └── phase1-migration.md    # NEW: one-time preserve → reinstall/in-place wipe → restore runbook
+└── .mise.toml.example             # TAILSCALE_AUTHKEY + ANSIBLE_BECOME_PASSWORD placeholders
 ```
 
 **Structure Decision**: Keep the Phase-0 `provision/` directory and fill it with a

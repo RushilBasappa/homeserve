@@ -80,18 +80,29 @@ irreversible.
 ## 5. Reinstall — fresh Debian with SSH (FR-006)
 
 > This is the **only** place the incumbent **k3s** cluster is removed. k3s
-> teardown is **not** part of the reusable provisioning (SC-008) — the fresh OS
-> install wipes it as a side effect of starting clean.
+> teardown is **not** part of the reusable provisioning (SC-008) — it is a
+> one-time step that returns the node to a clean starting state.
 
-Freshly install **Debian 12 (bookworm)** on the node. During/after install:
+Reach the clean state one of two ways:
 
-- Enable the **SSH server** and authorize the operator's public key (or a
-  password for the very first connection, immediately replaced by key-only, which
-  `make provision` enforces).
-- Recreate the `/srv/nfs` path (empty for now — repopulated in step 7).
+- **Fresh OS install (canonical):** freshly install **Debian** (13 "trixie"
+  as-built; 12 "bookworm" also works). The reinstall wipes k3s and every trace of
+  the old cluster.
+- **In-place teardown (as-built alternative):** run `scripts/cleanup-all.sh --yes`
+  from the control machine. It removes k3s (via its official uninstaller), Docker,
+  the `/srv/nfs` data, and caches while **preserving SSH access** (host keys +
+  `authorized_keys` + the openssh server) — so no reinstall is needed. Dry-run by
+  default; requires typing `wipe <hostname>` to proceed.
 
-The fresh install removes k3s and every trace of the old cluster; provisioning
-assumes exactly this clean starting state and performs no cleanup of leftovers.
+Either way, during/after:
+
+- Ensure the **SSH server** is up with the operator's public key authorized (a
+  fresh install may need a password for the first connection, immediately replaced
+  by key-only, which `make provision` enforces).
+- Recreate the `/srv/nfs` path if absent (empty for now — repopulated in step 7).
+
+Both paths remove k3s and leave a clean host; provisioning assumes exactly this
+starting state and performs no cleanup of leftovers.
 
 ## 6. Provision — `make provision` (FR-007)
 

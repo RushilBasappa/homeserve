@@ -101,11 +101,16 @@ inherits settled choices.
 ## R8 — Secret injection
 
 - **Decision**: `make provision` runs `mise exec -- ansible-playbook …`; the
-  playbook reads secrets with `lookup('env', 'TAILSCALE_AUTHKEY')`. No secret is
-  ever written to a tracked file; `.mise.toml` stays gitignored (Phase 0).
+  playbook reads secrets from the env with `lookup('env', …)`. No secret is ever
+  written to a tracked file; `.mise.toml` stays gitignored (Phase 0). As-built
+  there are **two** env-injected secrets: `TAILSCALE_AUTHKEY` (enrollment) and
+  `ANSIBLE_BECOME_PASSWORD` — the admin user's sudo password, referenced by
+  `ansible_become_password` in `group_vars/all.yml` so escalation is
+  non-interactive and the value never lands on a command line/process list.
 - **Rationale**: Reuses the Phase 0 secret pattern end-to-end; keeps the repo safe
-  to share. Phase 1's only real secret is the Tailscale auth key (Cloudflare/
-  WireGuard secrets belong to later phases).
+  to share. The nodes' admin user has password (not passwordless) sudo, so the
+  become password is required for a one-command run (Cloudflare/WireGuard secrets
+  belong to later phases).
 - **Alternatives considered**: `ansible-vault` (introduces a second secret store —
   the plan standardized on `mise`); passing secrets on the CLI (leaks into shell
   history/process list).
@@ -153,8 +158,8 @@ inherits settled choices.
 
 ## Assumptions carried into design
 
-- Debian **12 (bookworm)** on both nodes (reasonable current-stable default; the
-  playbook avoids version-specific hacks so a newer stable would also work).
+- Debian on both nodes (as-built: **13 "trixie"**, system `python3.13`; the
+  playbook avoids version-specific hacks so 12 "bookworm" also works).
 - The operator installs the OS with SSH enabled and their key authorized (or
   password for the very first connection, immediately replaced by key-only).
 - The Dell's `/srv/nfs` path is recreated on the fresh OS and repopulated by the

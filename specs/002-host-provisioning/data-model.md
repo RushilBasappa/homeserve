@@ -53,11 +53,15 @@ The single media/config namespace both nodes see.
 | Field | Required content | Source FR |
 |---|---|---|
 | Export (Dell) | `/srv/nfs` exported `rw,sync,no_subtree_check` to 10.0.0.71 | FR-010 |
-| Mount (Mac) | `/srv/nfs` (or agreed mountpoint) via `x-systemd.automount` | FR-010 |
+| Ownership (Dell) | Export dir owned by `admin_user` (mode `0775`) so the client can write under NFS `root_squash` | FR-010, SC-005 |
+| Mount (Mac) | `/srv/nfs` via `x-systemd.automount` (`boot: false` to match `noauto`) | FR-010 |
 
 **Validation rules**:
-- The Mac MUST be able to read and write the export. (SC-005)
+- The Mac MUST be able to read and write the export. (SC-005) — requires the
+  export dir be owned by a non-root user the client maps to (root is squashed).
 - A temporarily-absent server MUST NOT wedge the Mac's boot. (edge case)
+- The client mountpoint task MUST NOT enforce a mode (once mounted, the path is
+  the server-owned NFS root and a chmod would fail).
 
 ## Entity: One-Time Migration Runbook
 
