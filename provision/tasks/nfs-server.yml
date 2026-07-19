@@ -9,11 +9,13 @@
     state: present
     update_cache: true
 
-- name: Ensure the export directory exists
+- name: Ensure the export directory exists and is writable by the admin user
   ansible.builtin.file:
     path: "{{ nfs_export_path }}"
     state: directory
-    mode: "0755"
+    owner: "{{ admin_user }}"
+    group: "{{ admin_user }}"
+    mode: "0775"
 
 - name: Export the shared path to the NFS client
   ansible.builtin.lineinfile:

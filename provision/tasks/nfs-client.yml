@@ -10,11 +10,14 @@
     state: present
     update_cache: true
 
+# No mode/owner here on purpose: once the automount is active this path IS the
+# NFS share (owned on the server, root-squashed), so enforcing a mode would try
+# to chmod the mounted root and fail. We only need the directory to exist as a
+# mountpoint before the mount is configured.
 - name: Ensure the mountpoint exists
   ansible.builtin.file:
     path: "{{ nfs_export_path }}"
     state: directory
-    mode: "0755"
 
 - name: Configure the automount of the Dell's NFS export
   ansible.posix.mount:
@@ -22,4 +25,15 @@
     src: "10.0.0.70:{{ nfs_export_path }}"
     fstype: nfs
     opts: "{{ nfs_mount_options }}"
+    boot: false          # agrees with `noauto` in opts (systemd automount handles it)
     state: present
+
+# `state: present` only writes fstab; without this, systemd doesn't generate the
+# x-systemd.automount unit until the next boot. Reload + enable so the mount is
+# active immediately, with no manual follow-up or reboot (SC-002).
+- name: Generate and activate the systemd automount unit
+  ansible.builtin.systemd:
+    name: "{{ nfs_export_path | regex_replace('^/', '') | regex_replace('/', '-') }}.automount"
+    enabled: true
+    state: started
+    daemon_reload: true

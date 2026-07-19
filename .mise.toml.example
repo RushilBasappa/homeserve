@@ -27,3 +27,10 @@ WIREGUARD_ADDRESSES   = "changeme-wireguard-client-address"  # e.g. 10.64.0.2/32
 # Tailscale auth key — personal remote-access VPN. Used to enroll nodes
 # non-interactively. Generate at https://login.tailscale.com/admin/settings/keys
 TAILSCALE_AUTHKEY = "changeme-tailscale-auth-key"
+
+# Sudo (become) password for the admin user on the provisioned nodes. Ansible
+# escalates to root via sudo; set this so `make provision` runs non-interactively
+# instead of prompting. Sensitive — this is your login sudo password; it stays in
+# the gitignored .mise.toml and is referenced by provision/group_vars/all.yml via
+# an env lookup, so it never lands in a tracked file or a command line.
+ANSIBLE_BECOME_PASSWORD = "changeme-sudo-password"

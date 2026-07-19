@@ -18,6 +18,11 @@ ansible_user: "{{ admin_user }}"
 # expanded by Ansible.
 ansible_ssh_private_key_file: "~/.ssh/ragnaforge-cluster"
 
+# Sudo (become) password, read from the env rendered by `mise` — never stored in
+# a tracked file. Set ANSIBLE_BECOME_PASSWORD in the gitignored .mise.toml. Using
+# a var (not the CLI) keeps it out of the process list; Ansible masks it in output.
+ansible_become_password: "{{ lookup('env', 'ANSIBLE_BECOME_PASSWORD') }}"
+
 # The *public* key authorized for `admin_user` on each node. Read from that same
 # key's .pub file at run time, so the key you connect with and the key you
 # authorize are guaranteed identical — nothing to paste or keep in sync.
