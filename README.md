@@ -15,11 +15,21 @@ plan and [`docs/CONVENTIONS.md`](./docs/CONVENTIONS.md) for how stacks are built
 
 ## Current status
 
-**Phase 0 — Foundation & repo scaffolding — ✅ complete.**
+**Phase 2 — Orchestration (Komodo) — ✅ complete.**
 
-Nothing is running yet. This repository currently documents itself: the
-directory layout, the secret-handling pattern, and the conventions every later
-phase drops into. No services are deployed until Phase 3.
+The two Debian hosts are a **centrally managed fleet**. Komodo Core runs on the
+Dell (its state in a Mongo volume on the Dell), with a Periphery agent on both
+nodes; the fleet's servers and stacks are declared in git under
+[`komodo/`](./komodo/) and reconciled by Komodo ResourceSync. A stack deploys to
+a chosen node **from Core alone** — no SSH, no manual `docker compose` on the
+node. Secrets come from the gitignored `.mise.toml` (kept in sync across nodes
+with `make sync-secrets`); the tracked tree stays secret-free. Proven live with a
+trivial `whoami` test stack across all eight validation scenarios (deploy,
+git-driven change, secret injection, node independence, reboot persistence). Real
+application services arrive from Phase 3 onward.
+
+Earlier phases: **Phase 0** (foundation & repo scaffolding) and **Phase 1** (host
+provisioning via Ansible + Tailscale) — ✅ complete.
 
 ## Repository layout
 
@@ -65,35 +75,39 @@ each entails.
 Repo skeleton, conventions, and secret-handling pattern in place. This is the
 clonable, self-documenting repository everything else builds on.
 
-### Phase 1 — Migration & host provisioning
+### Phase 1 — Migration & host provisioning ✅
 
-_Not started._ Two clean Docker hosts (existing data preserved), provisioned with
-lean Ansible; Tailscale verified on both nodes.
+Two clean Docker hosts (existing data preserved), provisioned with lean Ansible
+(`make provision`); Tailscale verified on both nodes. One-time migration steps in
+[`docs/runbooks/phase1-migration.md`](./docs/runbooks/phase1-migration.md).
 
-### Phase 2 — Orchestration (Komodo)
+### Phase 2 — Orchestration (Komodo) ✅
 
-**Orchestration config authored — ready to bring up.** The two Docker hosts
-become a **centrally managed fleet** with Komodo (v2):
+**Live on the two hosts.** The Docker hosts are a **centrally managed fleet** with
+Komodo (v2):
 
 - **Komodo Core** on the Dell (`komodo-core:2` + MongoDB, cache-capped, state in
   a named volume on the Dell) is the single deploy surface — its UI/API on
   `:9120`, LAN/Tailscale only (no public exposure until Phase 3). Bootstrapped
   out-of-band with `make komodo-core`.
 - **Komodo Periphery** on **each** node (`make komodo-periphery`) runs
-  `docker compose` locally; Core connects inbound on `:8120`.
+  `docker compose` locally; Core connects inbound over `https://…:8120`.
 - **Git is the source of truth** — the fleet's Servers and Stacks are declared as
   TOML under [`komodo/`](./komodo/); Komodo **ResourceSync** reconciles from this
-  repo. A trivial stateless [`whoami`](./stacks/whoami/) stack proves
+  repo. A trivial stateless [`whoami`](./stacks/whoami/) stack proved
   deploy-to-a-chosen-node from Core alone.
-- **Secrets from `mise`** — Core's own secrets and stack `${VAR}` references are
-  injected from the gitignored `.mise.toml`; no real value in any tracked file.
-- **Deliberate deploys** — manual by default, optional per-stack git webhook.
+- **Secrets from `mise`** — stack `${VAR}` references resolve from the gitignored
+  `.mise.toml`, kept in sync across nodes with `make sync-secrets`; no real value
+  in any tracked file.
+- **Deliberate deploys** — manual by default; optional per-stack git webhook
+  deferred to Phase 3 (needs Core publicly reachable).
 
-Bring-up is a one-time, host-side procedure documented in
-[`docs/runbooks/phase2-komodo.md`](./docs/runbooks/phase2-komodo.md) (create the
-admin, wire the ResourceSync, deploy the test stack, validate secret injection,
-node independence, and state persistence). It runs on the two real nodes with a
-live Core.
+Validated live across all eight scenarios — deploy to a chosen node, git-driven
+change, secret injection, node independence (a node down doesn't block the other),
+and state persistence across a reboot. The one-time bring-up and the operational
+workflow are in
+[`docs/runbooks/phase2-komodo.md`](./docs/runbooks/phase2-komodo.md); forward-looking
+ideas in [`docs/improvements.md`](./docs/improvements.md).
 
 ### Phase 3 — Edge, DNS & TLS
 
