@@ -1,0 +1,29 @@
+# .mise.toml.example — placeholder secrets template
+#
+# Copy this file to `.mise.toml` and replace every placeholder with a real value:
+#
+#     cp .mise.toml.example .mise.toml
+#
+# `.mise.toml` is gitignored and MUST NEVER be committed. `mise` renders these
+# into environment variables that Komodo injects into stacks. Every value below
+# is an obvious placeholder — a leftover `changeme-` value means it wasn't filled.
+
+[env]
+# Cloudflare API token — Let's Encrypt DNS-01 wildcard cert (*.ragnaforge.xyz)
+# and Cloudflare DDNS (keeps vpn.ragnaforge.xyz on the current public IP).
+# Scope: DNS edit on the ragnaforge.xyz zone. Used by: Traefik, Cloudflare DDNS.
+CLOUDFLARE_API_TOKEN = "changeme-cloudflare-api-token"
+
+# Commercial-VPN WireGuard egress credentials — used by Gluetun to route
+# qBittorrent's traffic out through the VPN (killswitch on). Get these from your
+# commercial VPN provider's WireGuard config.
+WIREGUARD_PRIVATE_KEY = "changeme-wireguard-private-key"
+WIREGUARD_ADDRESSES   = "changeme-wireguard-client-address"  # e.g. 10.64.0.2/32
+# Optional, provider-dependent (uncomment/fill if your provider supplies them):
+# WIREGUARD_PRESHARED_KEY = "changeme-wireguard-preshared-key"
+# WIREGUARD_ENDPOINT_IP   = "changeme-wireguard-endpoint-ip"
+# WIREGUARD_ENDPOINT_PORT = "51820"
+
+# Tailscale auth key — personal remote-access VPN. Used to enroll nodes
+# non-interactively. Generate at https://login.tailscale.com/admin/settings/keys
+TAILSCALE_AUTHKEY = "changeme-tailscale-auth-key"

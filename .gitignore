@@ -1,0 +1,27 @@
+# --- Secrets: never commit real values ---
+# Real rendered secrets (copy .mise.toml.example → .mise.toml and fill in).
+.mise.toml
+# Environment files (any name).
+.env
+*.env
+
+# --- Generated / rendered artifacts ---
+# Output that tooling produces from tracked sources — regenerate, don't commit.
+*.rendered
+rendered/
+generated/
+
+# Traefik / Let's Encrypt runtime state (real certs + ACME account key).
+acme.json
+*.acme.json
+
+# --- Local tooling (not part of the deliverable) ---
+# Spec Kit framework and Claude Code skills — local authoring tools.
+.specify/
+.claude/
+
+# --- OS / editor noise ---
+.DS_Store
+Thumbs.db
+*.swp
+*.tmp
