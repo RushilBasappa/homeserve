@@ -67,7 +67,19 @@ Dell manual.
 
 ---
 
-## 2. 💡 Better secret distribution to the nodes (no manual `.mise.toml` copy)
+## 2. ✅ Better secret distribution to the nodes (no manual `.mise.toml` copy)
+
+> **DECIDED & DONE (2026-07-19).** Adopted the simplest option that keeps the
+> current architecture: **`make sync-secrets`** (Ansible, `provision/sync-secrets.yml`)
+> pushes an **exact copy** of the repo `.mise.toml` to every node, idempotently,
+> and refreshes Periphery so new `${VAR}` values take effect. The workstation file
+> stays the single source; no hand-copying, no drift; nodes keep mise + `${VAR}`
+> (no migration to Komodo `[[VAR]]`, no secrets in Core's DB). Workflow +
+> the wait-for-reconnect caveat are in
+> [`runbooks/phase2-komodo.md`](./runbooks/phase2-komodo.md#keeping-secrets-in-sync-across-the-nodes).
+> The options below are kept for the record / if requirements change. The other
+> ideas (Komodo `[[VAR]]`, SOPS+age, a secrets manager) remain available if the
+> fleet later needs central rotation, audit, or encrypted-in-git secrets.
 
 **Context.** Real secrets live in the gitignored `.mise.toml`. During Phase 2
 bring-up we **manually copied** that file from the workstation onto each node

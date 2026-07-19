@@ -203,6 +203,35 @@ Adding or removing a node is a **config change**, not a re-architecture:
 
 ---
 
+## Keeping secrets in sync across the nodes
+
+The workstation's gitignored `.mise.toml` is the single source of truth. Stacks
+resolve `${VAR}` from each node's mise env, so the file must be present on every
+node. `make sync-secrets` (Ansible, `provision/sync-secrets.yml`) pushes an **exact
+copy** to `~/homeserve/.mise.toml` on both nodes, idempotently — a node is only
+touched when the content differs.
+
+Workflow to change a secret:
+
+```sh
+# 1. edit the one source
+$EDITOR .mise.toml
+# 2. push it to every node (only changed nodes are rewritten; Periphery is
+#    recreated there so its process env picks up the new value)
+make sync-secrets
+# 3. WAIT a few seconds for the agents to reconnect to Core (see note), then
+# 4. redeploy the affected stack from Komodo (deploys stay deliberate)
+```
+
+> **Note — wait for reconnect before deploying.** `make sync-secrets` recreates
+> Periphery on a changed node, so Core briefly sees that server as unreachable. A
+> deploy fired in that window fails with *"Cannot send command when Server is
+> unreachable or disabled."* Wait until the server shows healthy again (a few
+> seconds) before triggering the deploy.
+
+A fresh node gets its secrets the same way (or fold `sync-secrets` into
+`make provision`); nothing is hand-copied.
+
 ## Done when
 
 - Core is up on the LAN/Tailscale (not public), single admin exists, registration

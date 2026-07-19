@@ -14,6 +14,9 @@
 #   make komodo-core        bring up Komodo Core + MongoDB   (Dell only)
 #   make komodo-periphery   bring up the Periphery agent     (each node)
 #
+# Secrets — run from the workstation (control node):
+#   make sync-secrets       push the repo .mise.toml to every node, in sync
+#
 # The provision targets depend on `deps`, so a fresh control node is
 # self-sufficient — no undocumented `ansible-galaxy` step (SC-009, FR-007).
 
@@ -25,7 +28,7 @@ ANSIBLE_PLAYBOOK := mise exec -- ansible-playbook -i provision/inventory.yml pro
 KOMODO_CORE_COMPOSE      := mise exec -- docker compose -f komodo/bootstrap/core.compose.yaml
 KOMODO_PERIPHERY_COMPOSE := mise exec -- docker compose -f komodo/bootstrap/periphery.compose.yaml
 
-.PHONY: deps provision provision-dell provision-mac check komodo-core komodo-periphery
+.PHONY: deps provision provision-dell provision-mac check komodo-core komodo-periphery sync-secrets
 
 deps:
 	mise exec -- ansible-galaxy collection install -r provision/requirements.yml
@@ -51,3 +54,9 @@ komodo-core:
 # Each node (Dell + Mac).
 komodo-periphery:
 	$(KOMODO_PERIPHERY_COMPOSE) up -d
+
+# Push the repo's .mise.toml to every node so secrets stay in sync with the
+# source. Idempotent — only changed nodes are touched, and Periphery is refreshed
+# there so new ${VAR} values take effect. Run after editing .mise.toml.
+sync-secrets:
+	mise exec -- ansible-playbook -i provision/inventory.yml provision/sync-secrets.yml
