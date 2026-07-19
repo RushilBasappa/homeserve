@@ -13,6 +13,8 @@ services:
     restart: unless-stopped
     # No `ports:` — placement/logs are observed centrally through Komodo, not by
     # publishing a host port. No volumes — the stack holds no state.
+    labels:
+      - "phase2.manual_default=applied-on-trigger"
     environment:
       # Secret-injection proof (US3, research R4): a throwaway secret rendered by
       # mise into the Periphery process env and referenced here as ${VAR} — never
