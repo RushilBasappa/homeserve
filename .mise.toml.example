@@ -8,6 +8,9 @@
 # into environment variables that Komodo injects into stacks. Every value below
 # is an obvious placeholder — a leftover `changeme-` value means it wasn't filled.
 
+[settings]
+env_shell_expand = false
+
 [env]
 # Cloudflare API token — Let's Encrypt DNS-01 wildcard cert (*.ragnaforge.xyz)
 # and Cloudflare DDNS (keeps vpn.ragnaforge.xyz on the current public IP).
