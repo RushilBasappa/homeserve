@@ -26,13 +26,8 @@ services:
     environment:
       # DNS-01 credential — the EXISTING Cloudflare token, reused (research R12).
       # Referenced as ${VAR}; the real value lives only in the gitignored
-      # .mise.toml (FR-014, SC-009).
+      # .mise.toml and is forwarded via the Periphery agent env (FR-014, SC-009).
       CF_DNS_API_TOKEN: ${CLOUDFLARE_API_TOKEN}
-    command:
-      # ACME account email is non-secret config → sourced from komodo/variables.toml
-      # ([[ACME_EMAIL]], interpolated by Komodo) and merged into the file-based
-      # static config below. Keeps the mounted traefik.yaml free of PII.
-      - "--certificatesresolvers.letsencrypt.acme.email=[[ACME_EMAIL]]"
     volumes:
       # Static config (entrypoints, providers, cert resolver). Read-only.
       - ./traefik.yaml:/etc/traefik/traefik.yaml:ro

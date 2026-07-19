@@ -1,40 +1,59 @@
-# tasks/edge-dns.yml — free :53 on the Dell for AdGuard Home (Phase 3, research R3).
+# tasks/edge-dns.yml — ensure :53 on the Dell is free for AdGuard Home
+# (Phase 3, research R3). Scoped to the Dell — the Mac is not a resolver.
 #
-# Debian's systemd-resolved holds 127.0.0.53:53 via its DNS stub listener, which
-# collides with AdGuard binding :53. Disabling ONLY the stub listener frees the
-# port while keeping systemd-resolved managing the host's own name resolution
-# (its real upstreams live in /run/systemd/resolve/resolv.conf). Scoped to the
-# Dell — the Mac is not a resolver.
+# IMPORTANT (learned during bring-up): this host does NOT run systemd-resolved,
+# and /etc/resolv.conf is OWNED BY TAILSCALE (MagicDNS → 100.100.100.100). We must
+# therefore:
+#   - NOT create a resolv.conf symlink (a stale /run/systemd/resolve link breaks
+#     all resolution on a box without resolved — this exact mistake bricked DNS);
+#   - NOT touch /etc/resolv.conf at all (Tailscale rewrites it);
+#   - only disable systemd-resolved's stub listener IF resolved is actually present
+#     and holding :53.
 #
-# Manual equivalent (documented in docs/runbooks/phase3-edge.md):
-#   printf '[Resolve]\nDNSStubListener=no\n' \
-#     | sudo tee /etc/systemd/resolved.conf.d/99-adguard.conf
-#   sudo ln -sf /run/systemd/resolve/resolv.conf /etc/resolv.conf
-#   sudo systemctl restart systemd-resolved
+# The host resolves via Tailscale/public upstreams, NOT via AdGuard — so AdGuard
+# being down never breaks the host's own name resolution.
 ---
-- name: Ensure the resolved drop-in directory exists
-  ansible.builtin.file:
-    path: /etc/systemd/resolved.conf.d
-    state: directory
-    owner: root
-    group: root
-    mode: "0755"
+- name: Detect whether systemd-resolved is active (it holds :53 via its stub)
+  ansible.builtin.command: systemctl is-active systemd-resolved
+  register: resolved_active
+  changed_when: false
+  failed_when: false
 
-- name: Disable the systemd-resolved DNS stub listener (frees :53 for AdGuard)
-  ansible.builtin.copy:
-    dest: /etc/systemd/resolved.conf.d/99-adguard.conf
-    content: |
-      # Managed by Ansible (provision/tasks/edge-dns.yml) — free :53 for AdGuard.
-      [Resolve]
-      DNSStubListener=no
-    owner: root
-    group: root
-    mode: "0644"
-  notify: Restart systemd-resolved
+- name: Disable the systemd-resolved DNS stub listener (only if resolved is active)
+  when: resolved_active.stdout == "active"
+  block:
+    - name: Ensure the resolved drop-in directory exists
+      ansible.builtin.file:
+        path: /etc/systemd/resolved.conf.d
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
 
-- name: Point /etc/resolv.conf at the resolved-managed file (not the 127.0.0.53 stub)
-  ansible.builtin.file:
-    src: /run/systemd/resolve/resolv.conf
-    dest: /etc/resolv.conf
-    state: link
-    force: true
+    - name: Turn off DNSStubListener (frees 127.0.0.53:53)
+      ansible.builtin.copy:
+        dest: /etc/systemd/resolved.conf.d/99-adguard.conf
+        content: |
+          # Managed by Ansible (provision/tasks/edge-dns.yml) — free :53 for AdGuard.
+          [Resolve]
+          DNSStubListener=no
+        owner: root
+        group: root
+        mode: "0644"
+      notify: Restart systemd-resolved
+  # NOTE: we deliberately do NOT re-point /etc/resolv.conf here. On this fleet
+  # Tailscale manages it; on a resolved-managed host you would instead ensure
+  # /etc/resolv.conf → /run/systemd/resolve/resolv.conf, but never a dangling link.
+
+- name: Assert :53 is free for AdGuard to bind
+  ansible.builtin.shell: "ss -lunp | awk '{print $5}' | grep -qE ':53$'"
+  register: port53
+  changed_when: false
+  failed_when: false
+
+- name: Warn if something still holds :53
+  ansible.builtin.debug:
+    msg: >-
+      WARNING: something is listening on :53 — AdGuard will fail to bind. Identify
+      it with `sudo ss -lunp | grep :53` before deploying the adguard stack.
+  when: port53.rc == 0

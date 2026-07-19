@@ -27,8 +27,9 @@ services:
       # DNS-edit-scoped Cloudflare token, referenced as ${VAR} (FR-014).
       CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN}
       # The single dynamic record this phase needs; app names resolve internally
-      # via AdGuard, so no other public A records exist.
-      DOMAINS: ${VPN_HOSTNAME}
+      # via AdGuard, so no other public A records exist. Non-secret → Komodo
+      # variable interpolation ([[VPN_HOSTNAME]] from komodo/variables.toml).
+      DOMAINS: "[[VPN_HOSTNAME]]"
       # WireGuard/UDP must NOT go through Cloudflare's proxy.
       PROXIED: "false"
       # The VPN endpoint is IPv4; skip AAAA to avoid needless IPv6 churn.

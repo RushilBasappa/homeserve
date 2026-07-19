@@ -10,14 +10,21 @@ Reference: research **R3**, contract
 [`dns-resolution-contract.md`](../../specs/004-edge-dns-tls/contracts/dns-resolution-contract.md),
 validated by quickstart **Scenario 2** (SC-005).
 
-## 0. Prerequisite — free `:53` on the Dell
+## 0. Prerequisite — `:53` must be free on the Dell
 
-`systemd-resolved` holds `:53` on Debian via its stub listener. Run the Phase-3
-provision task first (or the manual equivalent in the runbook):
+AdGuard needs to bind host `:53`. On **this** fleet `:53` is already free (the Dell
+runs no `systemd-resolved`, and Tailscale's resolver lives at `100.100.100.100`,
+not a host `:53` bind), so no prep is needed — `provision/tasks/edge-dns.yml` just
+asserts it. Confirm before deploying:
 
 ```sh
-make provision-dell        # applies provision/tasks/edge-dns.yml
+sudo ss -lunp | grep ':53' || echo ":53 free"
 ```
+
+> ⚠️ Do **not** repoint `/etc/resolv.conf` on the Dell — Tailscale owns it
+> (MagicDNS). Creating a `/run/systemd/resolve/...` symlink on a host without
+> `systemd-resolved` breaks all name resolution. If a future host *does* run
+> `systemd-resolved`, `edge-dns.yml` disables only its stub listener.
 
 ## 1. First-run wizard
 

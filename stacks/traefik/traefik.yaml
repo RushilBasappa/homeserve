@@ -1,8 +1,6 @@
 # Traefik v3 STATIC configuration (research R1, R2).
 #
-# Mounted read-only at /etc/traefik/traefik.yaml. The ACME account email is NOT
-# here — it is merged in from a CLI arg in compose.yaml sourced from
-# komodo/variables.toml ([[ACME_EMAIL]]) so this tracked file carries no PII.
+# Mounted read-only at /etc/traefik/traefik.yaml.
 #
 # Design notes:
 #  - Global HTTP→HTTPS redirect is configured ONCE on the `web` entryPoint, never
@@ -53,8 +51,12 @@ providers:
 certificatesResolvers:
   letsencrypt:
     acme:
+      # ACME account email for expiry notices (non-secret; already present in git
+      # commit metadata). Inlined here to keep the critical cert path free of any
+      # interpolation dependency.
+      email: "rushil.basappa@gmail.com"
       # Persisted on the traefik-acme volume; Traefik writes it 0600 and reuses it
-      # across restarts (FR-007, SC-007). (email is supplied via CLI arg.)
+      # across restarts (FR-007, SC-007).
       storage: /acme/acme.json
       dnsChallenge:
         provider: cloudflare

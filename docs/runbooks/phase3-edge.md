@@ -33,15 +33,25 @@ make edge-network          # create the external `traefik` Docker network (idemp
 ```
 
 What this does:
-- **Frees `:53`** — disables systemd-resolved's DNS stub listener so AdGuard can
-  bind `:53` (`provision/tasks/edge-dns.yml`; manual equivalent in that file's
-  header).
+- **`:53` free for AdGuard** — on this fleet `:53` is already free (no
+  `systemd-resolved`; Tailscale's resolver is at `100.100.100.100`), so
+  `provision/tasks/edge-dns.yml` just asserts it. ⚠️ Do **not** repoint
+  `/etc/resolv.conf` — **Tailscale owns it** (MagicDNS). A dangling
+  `/run/systemd/resolve/...` symlink on a host without resolved breaks all DNS
+  (this bit us once during bring-up).
 - **IP forwarding** — `net.ipv4.ip_forward=1` persisted for wg-easy NAT
   (`provision/tasks/sysctl.yml`).
 - **`traefik` network** — the L2 Traefik and every HTTP app share (research R10).
 
-**Checkpoint:** `traefik` network exists; `ss -lunp | grep :53` shows nothing
-bound by resolved; `sysctl net.ipv4.ip_forward` = 1.
+> **Secret plumbing:** every stack secret referenced as `${VAR}` must be forwarded
+> in `komodo/bootstrap/periphery.compose.yaml`'s `environment:` (that is how it
+> reaches the Periphery-run `docker compose`), then `make sync-secrets` +
+> **recreate Periphery** so the new env takes effect. Non-secret config
+> (hostnames/IPs) uses Komodo `[[VAR]]` interpolation from `komodo/variables.toml`
+> instead. Forgetting the forward = `${VAR}` resolves empty at deploy.
+
+**Checkpoint:** `traefik` network exists; `sudo ss -lunp | grep :53` shows nothing
+bound; `sysctl net.ipv4.ip_forward` = 1.
 
 ## 1. Traefik + wildcard cert (US3 → quickstart Scenario 1)
 

@@ -26,8 +26,17 @@ services:
       # Working root for repos Komodo pulls and stack projects it writes.
       PERIPHERY_ROOT_DIRECTORY: /etc/komodo
       # --- Stack secrets forwarded from the mise-rendered env (research R4) ---
+      # Each secret a Periphery-run stack compose references as ${VAR} MUST be
+      # forwarded here so it lands in the agent's process env; the `docker compose`
+      # Periphery runs for a stack then inherits it. Non-secret config
+      # (hostnames/IPs) uses Komodo's [[VAR]] interpolation instead and does NOT
+      # belong here.
       # Present so a Periphery-run compose can resolve ${WHOAMI_TEST_SECRET}.
       WHOAMI_TEST_SECRET: ${WHOAMI_TEST_SECRET}
+      # Phase 3 (edge): Traefik DNS-01 + Cloudflare DDNS.
+      CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN}
+      # Phase 3 (edge): wg-easy admin bcrypt hash.
+      WG_EASY_PASSWORD_HASH: ${WG_EASY_PASSWORD_HASH}
     volumes:
       # Drive the node's Docker engine.
       - /var/run/docker.sock:/var/run/docker.sock

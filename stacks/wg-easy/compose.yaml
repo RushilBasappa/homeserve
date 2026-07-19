@@ -23,13 +23,14 @@ services:
     restart: unless-stopped
     environment:
       # Public endpoint name clients dial; tracked by DDNS (GO) or the VPS (NO-GO).
-      WG_HOST: ${VPN_HOSTNAME}
+      # Non-secret → Komodo variable interpolation (komodo/variables.toml).
+      WG_HOST: "[[VPN_HOSTNAME]]"
       # Admin password as a BCRYPT HASH (never plaintext); from the gitignored
       # .mise.toml. The hash's own `$` chars are safe here because the value comes
       # from the env, not a literal in this file (no $$ escaping needed).
       PASSWORD_HASH: ${WG_EASY_PASSWORD_HASH}
       # Push AdGuard to clients so *.ragnaforge.xyz resolves over the tunnel.
-      WG_DEFAULT_DNS: ${DELL_LAN_IP}
+      WG_DEFAULT_DNS: "[[DELL_LAN_IP]]"
       # Route the LAN subnet through the tunnel so clients reach the Dell/edge at
       # 10.0.0.70 (R9). Split-tunnel: only 10.0.0.0/24 goes over the VPN.
       WG_ALLOWED_IPS: 10.0.0.0/24
