@@ -30,19 +30,3 @@ file_paths = ["stacks/whoami/compose.yaml"]
 # Deliberate deploys (FR-007): manual by default. Opt into per-stack auto-deploy
 # by enabling the webhook (US4 / T020).
 webhook_enabled = false
-
-# Second stack on the OTHER node — proves per-node placement and node
-# independence (SC-005): it deploys to the Dell even while the Mac is offline.
-# Reuses the same stateless whoami compose (different host, so no collision).
-[[stack]]
-name = "whoami-dell"
-description = "Phase-2 node-independence proof — whoami on the Dell (SC-005)."
-tags = ["phase-2"]
-
-[stack.config]
-server = "ragnaforge-dell"
-repo = "RushilBasappa/homeserve"
-git_provider = "github.com"
-branch = "main"
-file_paths = ["stacks/whoami/compose.yaml"]
-webhook_enabled = false
