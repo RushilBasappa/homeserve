@@ -86,6 +86,11 @@ make komodo-periphery
 Each agent listens on `:8120`; Core connects inbound to it. The shared
 `KOMODO_PASSKEY` authenticates the connection.
 
+> **As-built:** Periphery v2 enables SSL by default — it serves **`https://…:8120`**
+> with a self-signed cert, and the passkey authenticates. So the declared server
+> addresses in `komodo/servers.toml` use `https://` (this also encrypts the
+> Core↔Periphery link on the wire, resolving the concern research R2 flagged).
+
 ---
 
 ## 4. Declare the fleet from git — ResourceSync (FR-003, SC-002)
@@ -191,7 +196,7 @@ grep -rIEi 'changeme-|-----BEGIN|tskey-[0-9]' komodo/ stacks/ \
 Adding or removing a node is a **config change**, not a re-architecture:
 
 - **Add:** run `make komodo-periphery` on the new node, add a `[[server]]` block
-  to `komodo/servers.toml` (its `http://<ip>:8120` address, `enabled = true`),
+  to `komodo/servers.toml` (its `https://<ip>:8120` address, `enabled = true`),
   commit, and re-sync. Point stacks at it as desired.
 - **Remove:** reassign its stacks to another server in `stacks.toml`, delete its
   `[[server]]` block, commit, re-sync, then stop its Periphery agent.

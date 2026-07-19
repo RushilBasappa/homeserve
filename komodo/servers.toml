@@ -13,7 +13,7 @@ description = "Dell laptop — Komodo Core host + Periphery. Stateful node (gold
 tags = ["phase-2"]
 
 [server.config]
-address = "http://10.0.0.70:8120"
+address = "https://10.0.0.70:8120"
 enabled = true
 
 [[server]]
@@ -22,5 +22,5 @@ description = "MacBook — Periphery only. Stateless / disposable compute node."
 tags = ["phase-2"]
 
 [server.config]
-address = "http://10.0.0.71:8120"
+address = "https://10.0.0.71:8120"
 enabled = true
