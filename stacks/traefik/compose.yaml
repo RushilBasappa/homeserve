@@ -6,12 +6,18 @@
 # and reuses it for every router — apps carry only routing labels + `tls=true`,
 # never their own cert (see docs/CONVENTIONS.md → "Traefik routing labels").
 #
+# ALL static config is passed as CLI flags below (not a mounted file): Komodo
+# deploys this from a git clone and a relative bind mount (`./traefik.yaml`) does
+# not reliably resolve in its compose project directory — Docker then creates an
+# empty dir and Traefik fails with "is a directory". CLI flags keep the stack
+# self-contained and deploy-location-independent.
+#
 # State: acme.json (cert + key + renewal metadata) on the Dell volume
 # `traefik-acme`, mounted at /acme; Traefik writes it 0600 and REUSES it across
 # restarts (no re-issuance — FR-007, SC-007).
 #
-# No admin dashboard is exposed (no --api.insecure, no dashboard router). If ever
-# enabled, it must bind LAN/Tailscale-only (FR-016).
+# No admin dashboard is exposed (no --api.insecure). If ever enabled, bind it
+# LAN/Tailscale-only (FR-016).
 
 services:
   traefik:
@@ -28,9 +34,33 @@ services:
       # Referenced as ${VAR}; the real value lives only in the gitignored
       # .mise.toml and is forwarded via the Periphery agent env (FR-014, SC-009).
       CF_DNS_API_TOKEN: ${CLOUDFLARE_API_TOKEN}
+    command:
+      - "--global.checknewversion=false"
+      - "--global.sendanonymoususage=false"
+      - "--log.level=INFO"
+      # entryPoint :80 — global HTTP→HTTPS redirect, configured once (FR-004).
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
+      - "--entrypoints.web.http.redirections.entrypoint.permanent=true"
+      # entryPoint :443 — every router here serves the shared wildcard, so apps
+      # only need `tls=true` (no per-app certresolver/domains labels).
+      - "--entrypoints.websecure.address=:443"
+      - "--entrypoints.websecure.http.tls.certresolver=letsencrypt"
+      - "--entrypoints.websecure.http.tls.domains[0].main=ragnaforge.xyz"
+      - "--entrypoints.websecure.http.tls.domains[0].sans=*.ragnaforge.xyz"
+      # Docker label discovery; nothing routed unless it opts in (FR-002).
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.docker.network=traefik"
+      # ACME: Let's Encrypt wildcard via Cloudflare DNS-01 — no inbound port
+      # needed, lifetime-agnostic renewal (no duration/profile pinned) (R2).
+      - "--certificatesresolvers.letsencrypt.acme.email=rushil.basappa@gmail.com"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/acme/acme.json"
+      - "--certificatesresolvers.letsencrypt.acme.dnschallenge=true"
+      - "--certificatesresolvers.letsencrypt.acme.dnschallenge.provider=cloudflare"
+      - "--certificatesresolvers.letsencrypt.acme.dnschallenge.resolvers=1.1.1.1:53,9.9.9.9:53"
     volumes:
-      # Static config (entrypoints, providers, cert resolver). Read-only.
-      - ./traefik.yaml:/etc/traefik/traefik.yaml:ro
       # Read-only Docker socket for label discovery (routes come from containers).
       - /var/run/docker.sock:/var/run/docker.sock:ro
       # Persisted cert store on the Dell — the only TLS state in the whole edge.
