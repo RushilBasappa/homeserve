@@ -26,10 +26,24 @@ sudo ss -lunp | grep ':53' || echo ":53 free"
 > `systemd-resolved` breaks all name resolution. If a future host *does* run
 > `systemd-resolved`, `edge-dns.yml` disables only its stub listener.
 
-## 1. First-run wizard
+## 1. Setup — automated (recommended)
 
-1. Deploy the stack from Komodo Core, then browse to `http://10.0.0.70:3000`
-   (LAN or Tailscale — this port is never router-forwarded).
+After deploying the `adguard` stack, run the setup script on the Dell. It drives
+AdGuard's HTTP API to complete first-run config (admin user, DNS `:53`/web `:3000`,
+the wildcard rewrite, upstreams+DNSSEC, and the ad blocklist) — reproducible and
+secret-free (the admin password comes from `${ADGUARD_ADMIN_PASSWORD}` in the
+gitignored `.mise.toml`):
+
+```sh
+cd ~/homeserve && mise exec -- ./scripts/adguard-setup.sh
+```
+
+That covers sections 2–4 below. The manual wizard steps are kept as reference /
+for tweaking in the UI at `http://10.0.0.70:3000` (LAN/Tailscale only).
+
+### Manual wizard (alternative / reference)
+
+1. Browse to `http://10.0.0.70:3000` (LAN or Tailscale — never router-forwarded).
 2. **Admin Web Interface**: keep port `3000`. **DNS server**: `53`.
 3. Create the admin user; set the password to the value of
    `ADGUARD_ADMIN_PASSWORD` from your gitignored `.mise.toml` (AdGuard stores it
