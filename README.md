@@ -72,8 +72,28 @@ lean Ansible; Tailscale verified on both nodes.
 
 ### Phase 2 — Orchestration (Komodo)
 
-_Not started._ Komodo Core on the Dell + Periphery on both nodes; git Resource
-Sync; the deploy workflow.
+**Orchestration config authored — ready to bring up.** The two Docker hosts
+become a **centrally managed fleet** with Komodo (v2):
+
+- **Komodo Core** on the Dell (`komodo-core:2` + MongoDB, cache-capped, state in
+  a named volume on the Dell) is the single deploy surface — its UI/API on
+  `:9120`, LAN/Tailscale only (no public exposure until Phase 3). Bootstrapped
+  out-of-band with `make komodo-core`.
+- **Komodo Periphery** on **each** node (`make komodo-periphery`) runs
+  `docker compose` locally; Core connects inbound on `:8120`.
+- **Git is the source of truth** — the fleet's Servers and Stacks are declared as
+  TOML under [`komodo/`](./komodo/); Komodo **ResourceSync** reconciles from this
+  repo. A trivial stateless [`whoami`](./stacks/whoami/) stack proves
+  deploy-to-a-chosen-node from Core alone.
+- **Secrets from `mise`** — Core's own secrets and stack `${VAR}` references are
+  injected from the gitignored `.mise.toml`; no real value in any tracked file.
+- **Deliberate deploys** — manual by default, optional per-stack git webhook.
+
+Bring-up is a one-time, host-side procedure documented in
+[`docs/runbooks/phase2-komodo.md`](./docs/runbooks/phase2-komodo.md) (create the
+admin, wire the ResourceSync, deploy the test stack, validate secret injection,
+node independence, and state persistence). It runs on the two real nodes with a
+live Core.
 
 ### Phase 3 — Edge, DNS & TLS
 

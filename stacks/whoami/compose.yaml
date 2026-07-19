@@ -1,0 +1,24 @@
+# whoami — the Phase-2 orchestration proof stack (research R8).
+#
+# The smallest thing that exercises "deploy to a chosen node from Core alone":
+# a trivial STATELESS HTTP echo (traefik/whoami). No host ports, no volumes, no
+# state — so it can run on either node with no golden-rule implications, and the
+# Mac stays disposable. This is NOT a real app; real services arrive in Phases
+# 3–6. Delete this stack once orchestration is proven.
+
+services:
+  whoami:
+    image: traefik/whoami:latest
+    container_name: whoami
+    restart: unless-stopped
+    # No `ports:` — placement/logs are observed centrally through Komodo, not by
+    # publishing a host port. No volumes — the stack holds no state.
+    environment:
+      # Secret-injection proof (US3, research R4): a throwaway secret rendered by
+      # mise into the Periphery process env and referenced here as ${VAR} — never
+      # a literal value. Verify it lands with:
+      #   docker exec whoami env | grep WHOAMI_TEST_SECRET
+      # If the Periphery-run compose does not resolve this from the agent's env,
+      # switch to the Komodo secret-Variable `[[WHOAMI_TEST_SECRET]]` fallback
+      # (research R4; decided in T017 / the runbook).
+      WHOAMI_TEST_SECRET: ${WHOAMI_TEST_SECRET}

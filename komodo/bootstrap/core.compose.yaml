@@ -1,0 +1,60 @@
+# Komodo Core — the control plane (Dell only).
+#
+# Bootstrapped OUT-OF-BAND with `make komodo-core`, because Core *is* the
+# orchestrator: it can't be deployed by a Komodo that isn't running yet
+# (research R3). Everything ABOVE the control plane — the whoami test stack and
+# every later app — is Komodo-managed via ResourceSync, not brought up this way.
+#
+# Secrets come from the gitignored `.mise.toml` via `mise exec` (the Makefile
+# target wraps the compose call). Non-secret config lives in `core.env`
+# (copy `core.env.example`; the real `core.env` is gitignored by `*.env`).
+#
+# Exposure (research R7): Core's UI/API is published on :9120 but the router
+# forwards no port to it, so only the LAN (10.0.0.0/24) and Tailscale can reach
+# it — never the public internet. Public domain + TLS is Phase 3.
+
+services:
+  mongo:
+    image: mongo:8
+    # `komodo.skip` keeps Komodo from ever trying to self-manage the bootstrap DB.
+    labels: [komodo.skip]
+    restart: unless-stopped
+    # Cap WiredTiger cache — the Dell has only 7.5 GB shared with future stacks
+    # (research R1). --quiet trims log noise.
+    command: --quiet --wiredTigerCacheSizeGB 0.5
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${KOMODO_DB_USERNAME:-komodo}
+      MONGO_INITDB_ROOT_PASSWORD: ${KOMODO_DB_PASSWORD}
+    volumes:
+      # State → the Dell (golden rule): Core's DB in named volumes on this host.
+      - komodo-mongo-data:/data/db
+      - komodo-mongo-config:/data/configdb
+    # No published ports — Mongo is reachable only by Core on the internal network.
+
+  core:
+    image: ghcr.io/moghtech/komodo-core:2
+    labels: [komodo.skip]
+    restart: unless-stopped
+    depends_on:
+      - mongo
+    ports:
+      # Published for LAN + Tailscale reach. NOT router-forwarded → not public.
+      - "9120:9120"
+    env_file:
+      # Non-secret Core configuration (host, title, DB name, registration toggle).
+      - core.env
+    environment:
+      # Secrets — resolved from the mise-rendered env, never literals (research R7).
+      KOMODO_DATABASE_ADDRESS: mongo:27017
+      KOMODO_DATABASE_USERNAME: ${KOMODO_DB_USERNAME:-komodo}
+      KOMODO_DATABASE_PASSWORD: ${KOMODO_DB_PASSWORD}
+      # Shared passkey Core presents to each Periphery agent (same value on nodes).
+      KOMODO_PASSKEY: ${KOMODO_PASSKEY}
+      KOMODO_WEBHOOK_SECRET: ${KOMODO_WEBHOOK_SECRET}
+      KOMODO_JWT_SECRET: ${KOMODO_JWT_SECRET}
+
+volumes:
+  komodo-mongo-data:
+    name: komodo-mongo-data
+  komodo-mongo-config:
+    name: komodo-mongo-config

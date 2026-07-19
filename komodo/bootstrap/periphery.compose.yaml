@@ -1,0 +1,41 @@
+# Komodo Periphery — the per-node agent (runs on BOTH nodes).
+#
+# Bootstrapped out-of-band with `make komodo-periphery` on each node (research
+# R2, R3). Periphery executes `docker compose` locally on behalf of Core; Core
+# connects INBOUND to it on :8120 over the LAN/Tailscale. The same
+# `KOMODO_PASSKEY` (from each node's gitignored `.mise.toml`) must match Core's.
+#
+# Secret forwarding (research R4, the load-bearing decision): stack secrets are
+# rendered by mise into THIS agent's process environment and passed through into
+# the container below (see WHOAMI_TEST_SECRET). A Periphery-run compose can then
+# resolve `${VAR}`. If Periphery does not forward its env into the compose it
+# invokes, fall back to a Komodo secret Variable `[[VAR]]` seeded from this env
+# (research R4 fallback; validated in T017 / the runbook).
+
+services:
+  periphery:
+    image: ghcr.io/moghtech/komodo-periphery:2
+    labels: [komodo.skip]
+    restart: unless-stopped
+    ports:
+      # Core reaches the agent here over LAN/Tailscale. Not router-forwarded.
+      - "8120:8120"
+    environment:
+      # Must equal Core's KOMODO_PASSKEY (both from mise-rendered env).
+      KOMODO_PASSKEY: ${KOMODO_PASSKEY}
+      # Working root for repos Komodo pulls and stack projects it writes.
+      PERIPHERY_ROOT_DIRECTORY: /etc/komodo
+      # --- Stack secrets forwarded from the mise-rendered env (research R4) ---
+      # Present so a Periphery-run compose can resolve ${WHOAMI_TEST_SECRET}.
+      WHOAMI_TEST_SECRET: ${WHOAMI_TEST_SECRET}
+    volumes:
+      # Drive the node's Docker engine.
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Host stats for the server's health/metrics view (read-only).
+      - /proc:/proc:ro
+      # Persist pulled repos + stack projects across agent restarts.
+      - komodo-periphery-root:/etc/komodo
+
+volumes:
+  komodo-periphery-root:
+    name: komodo-periphery-root

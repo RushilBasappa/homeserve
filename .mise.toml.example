@@ -34,3 +34,24 @@ TAILSCALE_AUTHKEY = "changeme-tailscale-auth-key"
 # the gitignored .mise.toml and is referenced by provision/group_vars/all.yml via
 # an env lookup, so it never lands in a tracked file or a command line.
 ANSIBLE_BECOME_PASSWORD = "changeme-sudo-password"
+
+# --- Phase 2: Komodo orchestration (research R4, R7, R9) ---
+# Komodo Core's own bootstrap secrets, rendered by mise into the environment at
+# `make komodo-core` bring-up (never written into a tracked file). Generate each
+# as a long random string, e.g. `openssl rand -hex 32`.
+#
+# MongoDB root password for Core's datastore (Dell). Used by: core.compose.yaml.
+KOMODO_DB_PASSWORD    = "changeme-komodo-db-password"
+# Signing secret for Komodo's incoming git webhooks (per-stack auto-deploy).
+KOMODO_WEBHOOK_SECRET = "changeme-komodo-webhook-secret"
+# Secret Komodo uses to sign the JWTs backing its login sessions.
+KOMODO_JWT_SECRET     = "changeme-komodo-jwt-secret"
+# Shared passkey authenticating Core → Periphery calls. The SAME value must be in
+# .mise.toml on the Dell (Core) and on every node running Periphery. Used by:
+# core.compose.yaml + periphery.compose.yaml.
+KOMODO_PASSKEY        = "changeme-komodo-passkey"
+
+# Demo stack secret for the Phase-2 secret-injection proof (US3). A throwaway
+# value injected into the whoami test stack as ${WHOAMI_TEST_SECRET} to prove a
+# secret reaches a container with no value in git. Safe to delete after Phase 2.
+WHOAMI_TEST_SECRET    = "changeme-whoami-demo-secret"

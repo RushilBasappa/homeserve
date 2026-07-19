@@ -1,0 +1,30 @@
+# Stacks — the deployable Compose projects Komodo manages, declared in git
+# (research R5; FR-003, FR-004). Each `[[stack]]` maps a name → a target Server
+# → a `compose.yaml` under `stacks/<app>/` in THIS repo, which Komodo pulls.
+# ResourceSync reconciles the live stacks against this file.
+#
+# `repo` points at this repository's GitHub remote
+# (git@github.com:RushilBasappa/homeserve.git). Komodo pulls the compose from
+# there. If the repo is private, add a Komodo git account/token for `RushilBasappa`
+# in Core (Settings → Git Accounts) so the pull authenticates.
+
+[[stack]]
+name = "whoami"
+description = "Phase-2 orchestration proof — trivial stateless traefik/whoami."
+tags = ["phase-2"]
+
+[stack.config]
+# Target node: the Mac, to prove per-node placement (deploy here, NOT the Dell).
+# Retarget to "ragnaforge-dell" to demonstrate a git-driven change (US2 / T014).
+server = "ragnaforge-mac"
+
+# Pull the compose from this git repo (GitHub).
+repo = "RushilBasappa/homeserve"
+git_provider = "github.com"
+git_account = "RushilBasappa"
+branch = "main"
+file_paths = ["stacks/whoami/compose.yaml"]
+
+# Deliberate deploys (FR-007): manual by default. Opt into per-stack auto-deploy
+# by enabling the webhook (US4 / T020).
+webhook_enabled = false

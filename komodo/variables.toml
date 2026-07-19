@@ -1,0 +1,24 @@
+# Variables — git-declared, NON-SECRET config only (data-model "Variable";
+# FR-003, FR-006). Komodo exposes these to resources as `[[VARIABLE_NAME]]`.
+#
+# SECRETS DO NOT BELONG HERE. Real secret values come from the mise-rendered
+# environment and are referenced in compose as `${VAR}` (primary path), or — if
+# a value must live in Komodo — as a Komodo *secret* Variable (`is_secret =
+# true`), which is redacted on export and seeded once from the mise env, never
+# written into this file (research R4 fallback). Everything below is plain
+# config that is safe to track in git.
+
+[[variable]]
+name = "FLEET_DOMAIN"
+description = "Base domain for the fleet (used from Phase 3 for app hostnames)."
+value = "ragnaforge.xyz"
+
+[[variable]]
+name = "DELL_LAN_IP"
+description = "LAN address of ragnaforge-dell (Core + stateful node)."
+value = "10.0.0.70"
+
+[[variable]]
+name = "MAC_LAN_IP"
+description = "LAN address of ragnaforge-mac (stateless compute node)."
+value = "10.0.0.71"
