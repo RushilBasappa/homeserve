@@ -1,0 +1,15 @@
+# provision/requirements.yml — Ansible collections the playbook depends on.
+#
+# The task files use modules outside ansible-core's built-ins:
+#   ansible.posix.sysctl        (tasks/sysctl.yml)
+#   ansible.posix.mount         (tasks/nfs-client.yml)
+#   ansible.posix.authorized_key(tasks/ssh-baseline.yml)
+#
+# Install on the control node with `make deps` (or directly:
+#   mise exec -- ansible-galaxy collection install -r provision/requirements.yml
+# ). `make provision` runs `make deps` first, so a fresh control node is
+# self-sufficient — no undocumented manual step (SC-009, FR-007).
+---
+collections:
+  - name: ansible.posix
+    version: ">=1.5.0"

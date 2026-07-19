@@ -1,0 +1,15 @@
+# tasks/sysctl.yml — persist IPv4 forwarding on the Dell (the future VPN subnet
+# router / wg-easy endpoint, Phase 7).
+#
+# A drop-in under /etc/sysctl.d survives reboots and package updates and is
+# cleaner than editing /etc/sysctl.conf directly (research.md R5). Scoped to the
+# Dell only — the Mac is not a router.
+---
+- name: Enable and persist net.ipv4.ip_forward
+  ansible.posix.sysctl:
+    name: net.ipv4.ip_forward
+    value: "1"
+    sysctl_file: /etc/sysctl.d/99-ragnaforge.conf
+    sysctl_set: true
+    reload: true
+    state: present

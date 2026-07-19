@@ -1,0 +1,20 @@
+# provision/inventory.yml — static inventory for the two Ragnaforge nodes.
+#
+# Two hosts, two role groups (dell = NFS server + subnet router; mac = NFS
+# client), and a `docker_hosts` parent group for everything both share (Docker,
+# SSH baseline, Tailscale). Two fixed LAN hosts don't warrant dynamic inventory
+# (research.md R2).
+all:
+  children:
+    docker_hosts:
+      children:
+        dell:
+        mac:
+    dell:
+      hosts:
+        ragnaforge-dell:
+          ansible_host: 10.0.0.70
+    mac:
+      hosts:
+        ragnaforge-mac:
+          ansible_host: 10.0.0.71

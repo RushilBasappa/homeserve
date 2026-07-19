@@ -1,0 +1,32 @@
+# tasks/ssh-baseline.yml — a consistent admin user + key-only SSH on every node.
+#
+# The admin account exists with the operator's authorized *public* key and the
+# sudo/docker groups; sshd is hardened via a drop-in (not by rewriting the whole
+# sshd_config, which is safer and upgrade-proof) and reloaded (research.md R6).
+---
+- name: Ensure the admin user exists in the sudo and docker groups
+  ansible.builtin.user:
+    name: "{{ admin_user }}"
+    groups:
+      - sudo
+      - docker
+    append: true
+    shell: /bin/bash
+    create_home: true
+
+- name: Authorize the operator's SSH public key for the admin user
+  ansible.posix.authorized_key:
+    user: "{{ admin_user }}"
+    key: "{{ admin_ssh_public_key }}"
+    state: present
+
+- name: Harden sshd via a drop-in (key-only, no root login)
+  ansible.builtin.copy:
+    dest: /etc/ssh/sshd_config.d/99-ragnaforge.conf
+    mode: "0644"
+    content: |
+      # Managed by provision/tasks/ssh-baseline.yml — do not edit by hand.
+      PasswordAuthentication no
+      PermitRootLogin no
+      PubkeyAuthentication yes
+  notify: Reload sshd

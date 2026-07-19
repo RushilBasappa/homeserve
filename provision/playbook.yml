@@ -1,0 +1,53 @@
+# playbook.yml — take a freshly installed Debian host to a ready Docker host.
+#
+# A single flat playbook that includes per-concern task files by host role — no
+# role tree (FR-014, research.md R1). Host differences are expressed through
+# inventory groups:
+#
+#   docker_hosts (both)  → docker, ssh-baseline, tailscale
+#   dell                 → sysctl (ip_forward), nfs-server
+#   mac                  → nfs-client
+#
+# Idempotent (FR-013), per-node runnable via `--limit` (FR-015), and secret-free:
+# the only secret (TAILSCALE_AUTHKEY) is read from the `mise`-rendered env.
+---
+- name: Baseline every Docker host (Docker, SSH, Tailscale)
+  hosts: docker_hosts
+  become: true
+  tasks:
+    - name: Docker Engine
+      ansible.builtin.import_tasks: tasks/docker.yml
+
+    - name: Admin user & SSH baseline
+      ansible.builtin.import_tasks: tasks/ssh-baseline.yml
+
+    - name: Tailscale install & enrollment
+      ansible.builtin.import_tasks: tasks/tailscale.yml
+
+  handlers:
+    - name: Reload sshd
+      ansible.builtin.systemd:
+        name: ssh
+        state: reloaded
+
+- name: Configure the Dell as NFS server + subnet router
+  hosts: dell
+  become: true
+  tasks:
+    - name: Kernel IP forwarding
+      ansible.builtin.import_tasks: tasks/sysctl.yml
+
+    - name: NFS server & export
+      ansible.builtin.import_tasks: tasks/nfs-server.yml
+
+  handlers:
+    - name: Reapply NFS exports
+      ansible.builtin.command: exportfs -ra
+      changed_when: true
+
+- name: Configure the Mac as NFS client
+  hosts: mac
+  become: true
+  tasks:
+    - name: NFS client automount
+      ansible.builtin.import_tasks: tasks/nfs-client.yml

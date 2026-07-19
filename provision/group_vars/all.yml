@@ -1,0 +1,38 @@
+# provision/group_vars/all.yml — non-secret variables shared by every host.
+#
+# Everything here is safe to track in git. SSH *public* keys are not secrets
+# (research.md R6); the only real secret in this phase is TAILSCALE_AUTHKEY,
+# which is read from the environment via `mise` (research.md R8) — never from
+# this file.
+
+# Connection / admin identity ------------------------------------------------
+
+# Single account for this home server: the operator's own login is the admin.
+# Provisioning ensures it exists with sudo + docker groups and key-only SSH.
+# This is also the SSH connection user — matching `ssh ragnaforge-*`.
+admin_user: rushil
+ansible_user: "{{ admin_user }}"
+
+# Point Ansible at the SAME private key `ssh ragnaforge-dell` already uses. Only
+# the *path* is referenced here — the key contents never leave ~/.ssh. `~` is
+# expanded by Ansible.
+ansible_ssh_private_key_file: "~/.ssh/ragnaforge-cluster"
+
+# The *public* key authorized for `admin_user` on each node. Read from that same
+# key's .pub file at run time, so the key you connect with and the key you
+# authorize are guaranteed identical — nothing to paste or keep in sync.
+admin_ssh_public_key: "{{ lookup('file', lookup('env', 'HOME') + '/.ssh/ragnaforge-cluster.pub') }}"
+
+# Shared storage (NFS) -------------------------------------------------------
+
+# The Dell exports this path; the Mac mounts it at the same path.
+nfs_export_path: /srv/nfs
+
+# The single client permitted to mount the export (the Mac's LAN IP).
+nfs_client_ip: 10.0.0.71
+
+# Export options (server side) and mount options (client side). The client uses
+# systemd automount so a temporarily-absent server never wedges the Mac's boot
+# (research.md R4).
+nfs_export_options: "rw,sync,no_subtree_check"
+nfs_mount_options: "rw,noauto,x-systemd.automount,x-systemd.mount-timeout=10"
