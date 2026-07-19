@@ -13,7 +13,7 @@
 
 [[stack]]
 name = "whoami"
-description = "Phase-2 orchestration proof — trivial stateless traefik/whoami."
+description = "Phase-2 orchestration proof — traefik/whoami [git-source-of-truth check 2026-07-19]."
 tags = ["phase-2"]
 
 [stack.config]
