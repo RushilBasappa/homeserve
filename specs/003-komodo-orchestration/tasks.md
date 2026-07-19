@@ -28,18 +28,18 @@ secret-injection path is confirmed on the **primary** route
 (T017 resolved). As-built steps and deviations are captured in
 [`docs/runbooks/phase2-komodo.md`](../../docs/runbooks/phase2-komodo.md#as-built-notes--first-live-bring-up-2026-07-19).
 
-**Done:** T001–T019, T021, T022, T024 — all four user stories proven live:
-US1 (deploy to a chosen node from Core), US2 (git source of truth — a re-synced
-change reflects in Core, SC-002), US3 (secret from mise, none in git, SC-003), and
-US4 manual-default (SC-004). Node independence (SC-005) verified — with the Mac
-agent stopped, Core reported it `NotOk` and a deploy to the Dell still succeeded.
+**Done:** T001–T019, T021–T024 — **all four user stories + all 8 quickstart
+scenarios proven live.** US1 (deploy to a chosen node from Core), US2 (git source
+of truth, SC-002), US3 (secret from mise, none in git, SC-003), US4 manual-default
+(SC-004), node independence (SC-005: Mac agent down → Core `NotOk`, Dell deploy
+still succeeded), and state persistence (SC-006: Dell rebooted → Core state — users,
+servers, stacks, history, sync config — fully intact, both agents reconnected).
 
-**Remaining (2 items):**
+**Remaining (1 item, deferred):**
 - **T020** — per-stack webhook auto-deploy: **deferred to Phase 3**. A GitHub push
   webhook needs Core reachable from GitHub's servers; Core is LAN/Tailscale-only
-  until public exposure (Traefik, Phase 3).
-- **T023 state-persistence (SC-006)** — reboot the Dell and confirm Core state
-  survives. **Pending user go-ahead** (disruptive: briefly drops Core/Mongo).
+  until public exposure (Traefik, Phase 3). Tracked in
+  [`docs/improvements.md`](../../docs/improvements.md).
 
 **As-built key deviations:** Periphery serves **https** on :8120 (not http);
 nodes needed **mise installed + repo cloned + `.mise.toml` copied**; first admin
@@ -172,7 +172,7 @@ the two real hosts + a running Core.
 
 - [X] T021 [P] Create `docs/runbooks/phase2-komodo.md`: bootstrap Core + Periphery, create admin/disable registration, configure the ResourceSync, deploy the test stack, the chosen secret-handling path, and **add/remove a node** (FR-011) — one-time bring-up runbook (SC-007, SC-008; FR-012)
 - [X] T022 [P] Run the conformance checks in `contracts/orchestration-contract.md` + `contracts/resource-sync-contract.md`: Core up and LAN-only, both servers healthy, `whoami` on the target node only, secret-free grep, manual-default, add/remove-node is a config change (SC-001..SC-006, SC-008)
-- [ ] T023 [P] Node-independence (SC-005) ✅ done; state-persistence (SC-006, Dell reboot) PENDING user go-ahead. Run the 8 validation scenarios in `quickstart.md`, including **node independence** (deploy to the Dell while the Mac is offline — SC-005) and **state persistence** (reboot the Dell, confirm Core state intact — SC-006)
+- [X] T023 [P] All 8 quickstart scenarios validated live, incl. node-independence (SC-005: Mac agent down → Core reported NotOk, Dell deploy still succeeded) and state-persistence (SC-006: Dell rebooted → Core state — users, servers, stacks, history, sync config — intact, both agents reconnected)
 - [X] T024 [P] Update `README.md` to record Phase 2: Komodo orchestration live (Core + both agents, git-synced, deploy from one place) (SC-007)
 
 ---
