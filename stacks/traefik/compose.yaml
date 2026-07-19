@@ -6,18 +6,32 @@
 # and reuses it for every router — apps carry only routing labels + `tls=true`,
 # never their own cert (see docs/CONVENTIONS.md → "Traefik routing labels").
 #
-# ALL static config is passed as CLI flags below (not a mounted file): Komodo
-# deploys this from a git clone and a relative bind mount (`./traefik.yaml`) does
-# not reliably resolve in its compose project directory — Docker then creates an
-# empty dir and Traefik fails with "is a directory". CLI flags keep the stack
-# self-contained and deploy-location-independent.
+# Two kinds of config, both shipped WITHOUT a host bind mount (Komodo deploys from
+# a git clone where relative bind mounts don't reliably resolve):
+#   - STATIC config → CLI flags in `command:`.
+#   - DYNAMIC config (the wildcard default cert) → an inline `configs:` block whose
+#     `content:` is materialised inside the container at /dynamic/tls.yaml and
+#     loaded via the file provider. `defaultGeneratedCert` makes Traefik obtain the
+#     wildcard PROACTIVELY at startup and serve it as the default for every
+#     tls=true router (an entrypoint-level tls.domains does NOT trigger issuance).
 #
 # State: acme.json (cert + key + renewal metadata) on the Dell volume
 # `traefik-acme`, mounted at /acme; Traefik writes it 0600 and REUSES it across
 # restarts (no re-issuance — FR-007, SC-007).
-#
-# No admin dashboard is exposed (no --api.insecure). If ever enabled, bind it
-# LAN/Tailscale-only (FR-016).
+
+configs:
+  traefik-dynamic:
+    # The one wildcard, generated once and reused by all routers (FR-005, SC-003).
+    content: |
+      tls:
+        stores:
+          default:
+            defaultGeneratedCert:
+              resolver: letsencrypt
+              domain:
+                main: "ragnaforge.xyz"
+                sans:
+                  - "*.ragnaforge.xyz"
 
 services:
   traefik:
@@ -43,16 +57,14 @@ services:
       - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
       - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
       - "--entrypoints.web.http.redirections.entrypoint.permanent=true"
-      # entryPoint :443 — every router here serves the shared wildcard, so apps
-      # only need `tls=true` (no per-app certresolver/domains labels).
       - "--entrypoints.websecure.address=:443"
-      - "--entrypoints.websecure.http.tls.certresolver=letsencrypt"
-      - "--entrypoints.websecure.http.tls.domains[0].main=ragnaforge.xyz"
-      - "--entrypoints.websecure.http.tls.domains[0].sans=*.ragnaforge.xyz"
       # Docker label discovery; nothing routed unless it opts in (FR-002).
       - "--providers.docker=true"
       - "--providers.docker.exposedbydefault=false"
       - "--providers.docker.network=traefik"
+      # File provider → the inline dynamic config (the wildcard default cert).
+      - "--providers.file.directory=/dynamic"
+      - "--providers.file.watch=true"
       # ACME: Let's Encrypt wildcard via Cloudflare DNS-01 — no inbound port
       # needed, lifetime-agnostic renewal (no duration/profile pinned) (R2).
       - "--certificatesresolvers.letsencrypt.acme.email=rushil.basappa@gmail.com"
@@ -60,6 +72,9 @@ services:
       - "--certificatesresolvers.letsencrypt.acme.dnschallenge=true"
       - "--certificatesresolvers.letsencrypt.acme.dnschallenge.provider=cloudflare"
       - "--certificatesresolvers.letsencrypt.acme.dnschallenge.resolvers=1.1.1.1:53,9.9.9.9:53"
+    configs:
+      - source: traefik-dynamic
+        target: /dynamic/tls.yaml
     volumes:
       # Read-only Docker socket for label discovery (routes come from containers).
       - /var/run/docker.sock:/var/run/docker.sock:ro
