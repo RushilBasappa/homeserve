@@ -1,0 +1,39 @@
+# homepage — the dashboard front door at home.ragnaforge.xyz (research R5).
+#
+# One memorable place listing every app with HTTPS links (FR-012, US5). Routed
+# like any other app via the canonical Traefik labels; reuses the wildcard cert.
+#
+# Config is GIT-DECLARED and bind-mounted from ./config so the front door is
+# reproducible from this repo (Komodo pulls the repo onto the Dell, so ./config
+# resolves inside the clone). See stacks/homepage/config/*.yaml.
+
+services:
+  homepage:
+    image: ghcr.io/gethomepage/homepage:latest
+    container_name: homepage
+    restart: unless-stopped
+    # No host `ports:` — reached only via Traefik (HTTP app rule).
+    networks:
+      - traefik
+    environment:
+      # Homepage rejects requests whose Host header isn't allow-listed; it is
+      # served at home.ragnaforge.xyz behind Traefik.
+      HOMEPAGE_ALLOWED_HOSTS: home.ragnaforge.xyz
+    volumes:
+      # Git-declared config (settings / services / bookmarks / widgets).
+      - ./config:/app/config
+      # Read-only Docker socket ONLY if label-based service discovery is enabled
+      # in config/docker.yaml; harmless to mount, discovery stays opt-in.
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    labels:
+      # --- canonical Traefik routing labels (contract edge-routing) ---
+      - "traefik.enable=true"
+      - "traefik.http.routers.homepage.rule=Host(`home.ragnaforge.xyz`)"
+      - "traefik.http.routers.homepage.entrypoints=websecure"
+      - "traefik.http.routers.homepage.tls=true"
+      # Homepage listens on 3000 internally.
+      - "traefik.http.services.homepage.loadbalancer.server.port=3000"
+
+networks:
+  traefik:
+    external: true

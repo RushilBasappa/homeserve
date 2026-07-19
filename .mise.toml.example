@@ -61,3 +61,22 @@ WHOAMI_TEST_SECRET    = "changeme-whoami-demo-secret"
 # the gitignored .mise.toml, never here.
 KOMODO_API_KEY        = "changeme-komodo-api-key"
 KOMODO_API_SECRET     = "changeme-komodo-api-secret"
+
+# --- Phase 3: Edge, DNS & TLS (research R6, R12) ---
+# NOTE: CLOUDFLARE_API_TOKEN (above) is REUSED in Phase 3 for both Traefik's
+# Let's Encrypt DNS-01 wildcard issuance AND Cloudflare DDNS — no new token needed
+# (research R12). The two placeholders below are new to this phase.
+#
+# wg-easy admin password, as a BCRYPT HASH (not the plaintext). wg-easy reads it
+# as PASSWORD_HASH so the admin secret is never stored in the clear. Generate with:
+#   docker run --rm ghcr.io/wg-easy/wg-easy wgpw 'your-admin-password'
+# (prints PASSWORD_HASH='...'; copy the hash between the quotes here). When pasting
+# a bcrypt hash into a shell/compose env, remember $ must be escaped as $$ in the
+# compose file — here in .mise.toml it is a plain string, so paste it verbatim.
+WG_EASY_PASSWORD_HASH = "changeme-wg-easy-bcrypt-hash"
+
+# AdGuard Home admin password. AdGuard stores its own bcrypt hash in AdGuardHome.yaml
+# (set on first-run wizard or seeded from config); this value is the plaintext you
+# log in with. Keep it here so the runbook can reference ${ADGUARD_ADMIN_PASSWORD}
+# without printing a real value into a tracked file.
+ADGUARD_ADMIN_PASSWORD = "changeme-adguard-admin-password"

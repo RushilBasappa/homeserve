@@ -1,0 +1,7 @@
+# Homepage — Docker service discovery (https://gethomepage.dev/configs/docker/).
+#
+# Optional: lets Homepage read container labels for auto-listing + health. The
+# socket is mounted read-only in compose.yaml. Left minimal/empty by default;
+# service entries above are explicit so the front door works without discovery.
+my-docker:
+  socket: /var/run/docker.sock

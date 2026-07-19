@@ -17,6 +17,10 @@
 # Secrets — run from the workstation (control node):
 #   make sync-secrets       push the repo .mise.toml to every node, in sync
 #
+# Phase 3 — Edge, DNS & TLS (research R7, R10):
+#   make edge-network       create the shared external `traefik` network (Dell)
+#   make preflight          GO/NO-GO for the public VPN endpoint (run first)
+#
 # The provision targets depend on `deps`, so a fresh control node is
 # self-sufficient — no undocumented `ansible-galaxy` step (SC-009, FR-007).
 
@@ -28,7 +32,7 @@ ANSIBLE_PLAYBOOK := mise exec -- ansible-playbook -i provision/inventory.yml pro
 KOMODO_CORE_COMPOSE      := mise exec -- docker compose -f komodo/bootstrap/core.compose.yaml
 KOMODO_PERIPHERY_COMPOSE := mise exec -- docker compose -f komodo/bootstrap/periphery.compose.yaml
 
-.PHONY: deps provision provision-dell provision-mac check komodo-core komodo-periphery sync-secrets
+.PHONY: deps provision provision-dell provision-mac check komodo-core komodo-periphery sync-secrets edge-network preflight
 
 deps:
 	mise exec -- ansible-galaxy collection install -r provision/requirements.yml
@@ -60,3 +64,17 @@ komodo-periphery:
 # there so new ${VAR} values take effect. Run after editing .mise.toml.
 sync-secrets:
 	mise exec -- ansible-playbook -i provision/inventory.yml provision/sync-secrets.yml
+
+# --- Phase 3: Edge, DNS & TLS ---
+
+# Create the shared external Docker network Traefik and every HTTP app join.
+# Run ON the Dell. Idempotent — a no-op if the network already exists (research R10).
+edge-network:
+	docker network inspect traefik >/dev/null 2>&1 || docker network create traefik
+
+# The checks-first GO/NO-GO gate for the public VPN endpoint (US7, research R7).
+# Run from the workstation BEFORE building the VPN slice. Pass an external UDP
+# probe result to complete check 2, e.g.:
+#   EXTERNAL_UDP_51820=open make preflight
+preflight:
+	./scripts/preflight-public-endpoint.sh

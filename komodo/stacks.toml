@@ -13,13 +13,14 @@
 
 [[stack]]
 name = "whoami"
-description = "Phase-2 orchestration proof — traefik/whoami [git-source-of-truth check 2026-07-19]."
-tags = ["phase-2"]
+description = "Phase-3 edge proof — traefik/whoami at whoami.ragnaforge.xyz."
+tags = ["phase-2", "phase-3"]
 
 [stack.config]
-# Target node: the Mac, to prove per-node placement (deploy here, NOT the Dell).
-# Retarget to "ragnaforge-dell" to demonstrate a git-driven change (US2 / T014).
-server = "ragnaforge-mac"
+# Phase 3: RETARGETED to the Dell — the edge (Traefik + the `traefik` network)
+# lives on the Dell, so the routed whoami proof must run there too (research R10).
+# (Phase 2 targeted the Mac to prove per-node placement; that lesson stands.)
+server = "ragnaforge-dell"
 
 # Pull the compose from this git repo (GitHub, public — anonymous clone).
 repo = "RushilBasappa/homeserve"
@@ -29,4 +30,77 @@ file_paths = ["stacks/whoami/compose.yaml"]
 
 # Deliberate deploys (FR-007): manual by default. Opt into per-stack auto-deploy
 # by enabling the webhook (US4 / T020).
+webhook_enabled = false
+
+# ============================================================================
+# Phase 3 — Edge, DNS & TLS (research R10, R11; data-model §11; FR-013).
+# Every edge capability is a Komodo-managed stack pinned to ragnaforge-dell,
+# deployed from Core, manual (webhook_enabled=false). Bring-up order is
+# Traefik → AdGuard → (whoami) → Homepage → DDNS → wg-easy — see
+# docs/runbooks/phase3-edge.md.
+# ============================================================================
+
+[[stack]]
+name = "traefik"
+description = "Phase-3 edge — reverse proxy + Let's Encrypt wildcard TLS (Cloudflare DNS-01)."
+tags = ["phase-3", "edge"]
+
+[stack.config]
+server = "ragnaforge-dell"
+repo = "RushilBasappa/homeserve"
+git_provider = "github.com"
+branch = "main"
+file_paths = ["stacks/traefik/compose.yaml"]
+webhook_enabled = false
+
+[[stack]]
+name = "adguard"
+description = "Phase-3 edge — internal DNS resolver (*.ragnaforge.xyz → 10.0.0.70) + ad-blocking."
+tags = ["phase-3", "edge"]
+
+[stack.config]
+server = "ragnaforge-dell"
+repo = "RushilBasappa/homeserve"
+git_provider = "github.com"
+branch = "main"
+file_paths = ["stacks/adguard/compose.yaml"]
+webhook_enabled = false
+
+[[stack]]
+name = "homepage"
+description = "Phase-3 edge — dashboard front door at home.ragnaforge.xyz."
+tags = ["phase-3", "edge"]
+
+[stack.config]
+server = "ragnaforge-dell"
+repo = "RushilBasappa/homeserve"
+git_provider = "github.com"
+branch = "main"
+file_paths = ["stacks/homepage/compose.yaml"]
+webhook_enabled = false
+
+[[stack]]
+name = "cloudflare-ddns"
+description = "Phase-3 edge — keep vpn.ragnaforge.xyz on the current public IP (direct path only)."
+tags = ["phase-3", "edge"]
+
+[stack.config]
+server = "ragnaforge-dell"
+repo = "RushilBasappa/homeserve"
+git_provider = "github.com"
+branch = "main"
+file_paths = ["stacks/cloudflare-ddns/compose.yaml"]
+webhook_enabled = false
+
+[[stack]]
+name = "wg-easy"
+description = "Phase-3 edge — secondary WireGuard VPN for family/friends; one public port (51820/udp)."
+tags = ["phase-3", "edge", "vpn"]
+
+[stack.config]
+server = "ragnaforge-dell"
+repo = "RushilBasappa/homeserve"
+git_provider = "github.com"
+branch = "main"
+file_paths = ["stacks/wg-easy/compose.yaml"]
 webhook_enabled = false

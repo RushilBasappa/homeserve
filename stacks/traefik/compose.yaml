@@ -1,0 +1,55 @@
+# traefik — the edge reverse proxy + wildcard-TLS terminator (research R1, R2, R10).
+#
+# Terminates HTTPS on :443, Host-routes `<app>.ragnaforge.xyz` to the right
+# container by Docker label, and redirects :80 → :443 globally. Obtains and
+# renews ONE Let's Encrypt wildcard cert (*.ragnaforge.xyz) via Cloudflare DNS-01
+# and reuses it for every router — apps carry only routing labels + `tls=true`,
+# never their own cert (see docs/CONVENTIONS.md → "Traefik routing labels").
+#
+# State: acme.json (cert + key + renewal metadata) on the Dell volume
+# `traefik-acme`, mounted at /acme; Traefik writes it 0600 and REUSES it across
+# restarts (no re-issuance — FR-007, SC-007).
+#
+# No admin dashboard is exposed (no --api.insecure, no dashboard router). If ever
+# enabled, it must bind LAN/Tailscale-only (FR-016).
+
+services:
+  traefik:
+    image: traefik:v3
+    container_name: traefik
+    restart: unless-stopped
+    # The one HTTP front door. 80/443 are the only host ports the edge publishes
+    # for apps; everything downstream is reached over the `traefik` network.
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      # DNS-01 credential — the EXISTING Cloudflare token, reused (research R12).
+      # Referenced as ${VAR}; the real value lives only in the gitignored
+      # .mise.toml (FR-014, SC-009).
+      CF_DNS_API_TOKEN: ${CLOUDFLARE_API_TOKEN}
+    command:
+      # ACME account email is non-secret config → sourced from komodo/variables.toml
+      # ([[ACME_EMAIL]], interpolated by Komodo) and merged into the file-based
+      # static config below. Keeps the mounted traefik.yaml free of PII.
+      - "--certificatesresolvers.letsencrypt.acme.email=[[ACME_EMAIL]]"
+    volumes:
+      # Static config (entrypoints, providers, cert resolver). Read-only.
+      - ./traefik.yaml:/etc/traefik/traefik.yaml:ro
+      # Read-only Docker socket for label discovery (routes come from containers).
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      # Persisted cert store on the Dell — the only TLS state in the whole edge.
+      - traefik-acme:/acme
+    networks:
+      - traefik
+
+volumes:
+  # Local named volume on the Dell (golden rule: state → the Dell). Holds
+  # acme.json; survives restarts so the wildcard is never needlessly re-issued.
+  traefik-acme:
+
+networks:
+  # The shared external proxy network, created ONCE on the Dell (`make
+  # edge-network`; research R10). Traefik and every HTTP app join it.
+  traefik:
+    external: true

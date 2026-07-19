@@ -109,10 +109,41 @@ workflow are in
 [`docs/runbooks/phase2-komodo.md`](./docs/runbooks/phase2-komodo.md); forward-looking
 ideas in [`docs/improvements.md`](./docs/improvements.md).
 
-### Phase 3 — Edge, DNS & TLS
+### Phase 3 — Edge, DNS & TLS 🟡 authored — pending bring-up
 
-_Not started._ Traefik + Let's Encrypt wildcard (Cloudflare DNS-01), AdGuard Home
-internal DNS, Cloudflare DDNS, Homepage dashboard.
+**Fully declared in git; awaiting operator bring-up on the Dell.** Every edge
+capability is a Komodo-managed stack pinned to `ragnaforge-dell`, deployed from
+Core — no ad-hoc node config. Delivered as code:
+
+- **Traefik v3** ([`stacks/traefik/`](./stacks/traefik/)) — the reverse proxy.
+  Discovers apps by Docker labels on the shared external `traefik` network,
+  Host-routes `<app>.ragnaforge.xyz`, and redirects HTTP→HTTPS globally.
+- **Wildcard TLS** — one Let's Encrypt `*.ragnaforge.xyz` cert via **Cloudflare
+  DNS-01**, requested once and reused by every router; `acme.json` persisted on a
+  Dell volume; **lifetime-agnostic** auto-renewal (no hardcoded LE lifetime).
+- **AdGuard Home** ([`stacks/adguard/`](./stacks/adguard/)) — internal resolver
+  answering `*.ragnaforge.xyz → 10.0.0.70` to every client (no split-horizon),
+  forwarding the rest upstream, ad/tracker blocklists on. `:53` freed from
+  `systemd-resolved` by [`provision/tasks/edge-dns.yml`](./provision/tasks/edge-dns.yml).
+- **Homepage** ([`stacks/homepage/`](./stacks/homepage/)) — the dashboard front
+  door at `home.ragnaforge.xyz`, config git-declared.
+- **Cloudflare DDNS** ([`stacks/cloudflare-ddns/`](./stacks/cloudflare-ddns/)) —
+  keeps `vpn.ragnaforge.xyz` on the current public IP.
+- **wg-easy** ([`stacks/wg-easy/`](./stacks/wg-easy/)) — the family/friends
+  WireGuard VPN; exactly **one** public port (`51820/udp`), admin UI
+  LAN/Tailscale-only; pushes the resolver + `10.0.0.0/24` route to clients.
+- **Preflight + relay** — a checks-first GO/NO-GO gate
+  ([`scripts/preflight-public-endpoint.sh`](./scripts/preflight-public-endpoint.sh),
+  `make preflight`) that decides direct port-forward vs. a conditional cloud relay
+  ([`relay/README.md`](./relay/README.md)).
+
+Both VPN paths converge: resolver → `10.0.0.70` → subnet route → Traefik →
+wildcard cert. Bring-up order, the preflight verdict, and family/friend onboarding
+(incl. Fire TV file import) are in
+[`docs/runbooks/phase3-edge.md`](./docs/runbooks/phase3-edge.md). The behavioral
+validation (cert issuance, HTTPS-by-name, DNS, both VPN paths, one-port public
+scan) runs against the live Dell per that runbook — this section moves to ✅ once
+those scenarios pass.
 
 ### Phase 4 — Storage
 

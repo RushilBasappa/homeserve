@@ -1,0 +1,51 @@
+# adguard — the internal DNS resolver + network ad/tracker blocker
+# (research R3, R9; contract dns-resolution).
+#
+# Answers a wildcard DNS REWRITE `*.ragnaforge.xyz → 10.0.0.70` IDENTICALLY to
+# every client (LAN, Tailscale, WireGuard — no split-horizon), forwards all other
+# names to upstream resolvers (DNSSEC on), and blocks ad/tracker domains. This is
+# what makes the friendly HTTPS names resolve network-wide (US4) so US1 needs no
+# hosts override.
+#
+# PRE-REQ: :53 on the Dell must be FREED from systemd-resolved's stub listener
+# before this can bind — done by `provision/tasks/edge-dns.yml` (research R3;
+# see docs/runbooks/phase3-edge.md).
+#
+# State: adguard-conf (AdGuardHome.yaml — rewrite/upstreams/blocklists/admin) and
+# adguard-work (query log, stats, filter cache) on the Dell.
+#
+# Config is applied via the first-run wizard and then persists on adguard-conf —
+# the exact settings to enter (rewrite rule, upstreams, blocklists, admin login
+# from ${ADGUARD_ADMIN_PASSWORD}) are in stacks/adguard/README.md.
+
+services:
+  adguard:
+    image: adguard/adguardhome:latest
+    container_name: adguard
+    restart: unless-stopped
+    ports:
+      # DNS — the reason this stack exists. Bound on the host so LAN/VPN clients
+      # (and wg-easy's pushed WG_DEFAULT_DNS=10.0.0.70) can query it.
+      - "53:53/tcp"
+      - "53:53/udp"
+      # Admin / initial-setup UI. Published on the host for LAN + Tailscale
+      # access; it is NEVER router-forwarded, so it stays private (FR-016). 3000
+      # is AdGuard's setup-wizard port and where we keep the web UI (80/443 belong
+      # to Traefik on this node).
+      - "3000:3000/tcp"
+    volumes:
+      - adguard-conf:/opt/adguardhome/conf
+      - adguard-work:/opt/adguardhome/work
+    networks:
+      - traefik
+
+volumes:
+  # Local named volumes on the Dell (golden rule: state → the Dell).
+  adguard-conf:
+  adguard-work:
+
+networks:
+  # Joined so AdGuard could later be Traefik-routed (e.g. adguard.ragnaforge.xyz,
+  # LAN/Tailscale-only) if desired; DNS itself is served on the host :53 above.
+  traefik:
+    external: true

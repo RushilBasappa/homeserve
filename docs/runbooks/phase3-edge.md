@@ -1,0 +1,191 @@
+# Runbook — Phase 3: Edge, DNS & TLS
+
+Bring up the edge: Traefik + a Let's Encrypt wildcard cert, AdGuard internal DNS,
+Homepage, Cloudflare DDNS, and the wg-easy family/friends VPN — every capability a
+Komodo-managed stack on the Dell, deployed from Core. This runbook is the
+operator's bring-up order and the validation each layer must pass before the next
+depends on it (research R11; quickstart Scenarios 0–8).
+
+> **One-line flow:** resolver (`*.ragnaforge.xyz → 10.0.0.70`) → subnet route →
+> Traefik Host-routing → shared wildcard cert.
+
+## Prerequisites
+
+- Phases 1–2 live: both nodes provisioned, Komodo Core + Periphery up,
+  deploy-from-Core proven.
+- `.mise.toml` filled (gitignored) with `CLOUDFLARE_API_TOKEN` (DNS-edit on the
+  `ragnaforge.xyz` zone), plus the new `WG_EASY_PASSWORD_HASH` (bcrypt) and
+  `ADGUARD_ADMIN_PASSWORD`. After editing, `make sync-secrets`.
+- Cloudflare is authoritative DNS for `ragnaforge.xyz` (registrar Porkbun; NS →
+  Cloudflare). A `vpn.ragnaforge.xyz` A record exists (any value — DDNS corrects).
+- Generate the wg-easy admin hash:
+  `docker run --rm ghcr.io/wg-easy/wg-easy wgpw 'your-admin-password'` → paste the
+  hash into `.mise.toml` as `WG_EASY_PASSWORD_HASH`.
+
+## 0. Dell host prep (Foundational — before any stack)
+
+Run the Phase-3 provision additions (idempotent), then create the shared network:
+
+```sh
+make provision-dell        # edge-dns.yml frees :53; sysctl.yml ensures ip_forward=1
+# on the Dell:
+make edge-network          # create the external `traefik` Docker network (idempotent)
+```
+
+What this does:
+- **Frees `:53`** — disables systemd-resolved's DNS stub listener so AdGuard can
+  bind `:53` (`provision/tasks/edge-dns.yml`; manual equivalent in that file's
+  header).
+- **IP forwarding** — `net.ipv4.ip_forward=1` persisted for wg-easy NAT
+  (`provision/tasks/sysctl.yml`).
+- **`traefik` network** — the L2 Traefik and every HTTP app share (research R10).
+
+**Checkpoint:** `traefik` network exists; `ss -lunp | grep :53` shows nothing
+bound by resolved; `sysctl net.ipv4.ip_forward` = 1.
+
+## 1. Traefik + wildcard cert (US3 → quickstart Scenario 1)
+
+Deploy `traefik` from Komodo Core (fresh `traefik-acme` volume).
+
+**Expect:** within a couple of minutes Traefik obtains a **Let's Encrypt**
+`*.ragnaforge.xyz` cert via Cloudflare DNS-01 (watch `docker logs traefik`;
+confirm `acme.json` exists and is `0600` inside the `traefik-acme` volume).
+Restart the stack → **no** re-issuance (cert reused; SC-007). A bad/absent
+`CLOUDFLARE_API_TOKEN` must fail **loudly** — no self-signed cert served.
+
+```sh
+docker exec traefik ls -l /acme/acme.json      # -rw------- (0600)
+```
+
+**Checkpoint:** wildcard cert live and persisted; the proxy is ready to route.
+
+## 2. AdGuard internal DNS (US4 → quickstart Scenario 2)
+
+Deploy `adguard`, then complete the first-run config in
+[`stacks/adguard/README.md`](../../stacks/adguard/README.md) (rewrite
+`*.ragnaforge.xyz → 10.0.0.70`, upstreams + DNSSEC, blocklists, admin password).
+Point a test device's DNS at `10.0.0.70`.
+
+**Expect:** `nslookup home.ragnaforge.xyz 10.0.0.70 → 10.0.0.70`; any
+`<x>.ragnaforge.xyz → 10.0.0.70`; a public domain still resolves; a known ad
+domain is blocked. Same answer for every client (no split-horizon).
+
+**Checkpoint:** friendly names resolve network-wide; ad-blocking active.
+
+## 3. whoami — app reachable by HTTPS name (US1/US2 → Scenario 3)
+
+`whoami` already carries the canonical Traefik labels and is pinned to the Dell in
+`komodo/stacks.toml`. Redeploy it from Core.
+
+**Expect:**
+- `https://whoami.ragnaforge.xyz` loads with a **browser-trusted** cert, no
+  warning, within ~30 s — no Traefik config edit (SC-002), served under the
+  existing wildcard (SC-003).
+- `http://whoami.ragnaforge.xyz` redirects to `https://` (SC-006).
+- `https://nope.ragnaforge.xyz` → clear 404, not a wrong app (SC-006).
+- Stop the stack → the route stops responding within seconds (no stale route).
+
+Before AdGuard resolves it, test with a temporary hosts override
+(`whoami.ragnaforge.xyz → 10.0.0.70`); remove it once Step 2 is live.
+
+**Publish-by-labels proof (US2):** add a second router (e.g. a `whoami2` Host
+rule) and confirm it is served under the **existing** wildcard with **no** Traefik
+config edit and **no** new issuance; then revert.
+
+## 4. Homepage front door (US5 → Scenario 4)
+
+Deploy `homepage`.
+
+**Expect:** `https://home.ragnaforge.xyz` loads over trusted HTTPS and shows a
+working link to `whoami`.
+
+## 5. Cloudflare DDNS (US6 → Scenario 5)
+
+Deploy `cloudflare-ddns` (direct path only — skip on the relay path).
+
+**Expect:** `vpn.ragnaforge.xyz` is set to the current public IP within ~5 min; an
+unchanged IP triggers no needless update (SC-008).
+
+## 6. Preflight — GO/NO-GO (US7 → Scenario 0, runs BEFORE wg-easy)
+
+```sh
+make preflight
+# to complete the external UDP check, temporarily forward UDP 51820, then from an
+# external vantage (phone hotspot / friend's box) confirm a WireGuard handshake and:
+EXTERNAL_UDP_51820=open make preflight     # or =closed if unreachable
+```
+
+**Expect:** a clear **GO** or **NO-GO** with reasons — public IP vs CGNAT
+(`100.64.0.0/10`), external UDP-51820 reachability, `vpn.ragnaforge.xyz`
+resolution. Inconclusive ⇒ NO-GO (never a false GO).
+
+**Record the verdict here — it selects Step 7's path:**
+
+| Field | Value |
+|---|---|
+| Date run | _<fill>_ |
+| Public IP | _<fill>_ |
+| CGNAT? | _<fill>_ |
+| External UDP 51820 | _<fill>_ |
+| Verdict | **GO** / **NO-GO** _(circle one)_ |
+| Chosen path | direct port-forward / cloud relay |
+
+## 7. wg-easy — the secondary VPN (US8 → Scenarios 6 & 7)
+
+Advertise the LAN subnet to Tailscale clients (operator path) first:
+
+```sh
+# on the Dell:
+sudo tailscale up --advertise-routes=10.0.0.0/24
+# then approve the route in the Tailscale admin console; operator devices --accept-routes
+```
+
+Then per the Step 6 verdict:
+
+- **GO** → on the xFi gateway, forward **only** UDP 51820 → the Dell
+  (`10.0.0.70`). Document the exact xFi app steps here as you do them.
+- **NO-GO** → stand up the relay from [`relay/README.md`](../../relay/README.md)
+  (VPS on the tailnet DNAT'ing `51820/udp` → the Dell's Tailscale IP) and point
+  `vpn.ragnaforge.xyz` at the VPS static IP. Stop `cloudflare-ddns`.
+
+Deploy `wg-easy` from Core; create a client config in the admin UI (`:51821`,
+LAN/Tailscale only).
+
+**Expect (Scenario 6):** from a device **off-LAN and off-Tailscale** (phone
+hotspot), import the `.conf`, connect via `vpn.ragnaforge.xyz`, and load
+`https://whoami.ragnaforge.xyz` + `https://home.ragnaforge.xyz` over trusted HTTPS
+— identical whether direct or relayed. Confirm the same app also loads over
+Tailscale (SC-012).
+
+**Family/friend onboarding:** create one client per person in the wg-easy admin;
+send the `.conf` (or QR). On a **Fire TV**, install the WireGuard app and import
+the `.conf` via a file (USB / Send Files to TV) — QR scanning isn't available on
+that remote.
+
+**Expect (Scenario 7 — the exposure invariant):** port-scan the home's public IP
+from an external vantage → **only UDP 51820** responds. No app, dashboard,
+resolver, or admin UI (wg-easy `51821`, AdGuard `3000`, Traefik) is reachable
+off-LAN/off-Tailscale (SC-010).
+
+**Checkpoint:** private remote access works over both VPN paths; exactly one port
+public.
+
+## 8. Secret-free tree (SC-009)
+
+```sh
+grep -rnE 'changeme-|[A-Za-z0-9_-]{32,}' komodo/ stacks/ --include=*.yaml --include=*.toml
+git grep -nI "$CLOUDFLARE_API_TOKEN"     # must find nothing
+```
+
+**Expect:** only `${VAR}` / `[[VAR]]` references in tracked files. A fresh clone +
+filled `.mise.toml` reproduces the whole edge from Core.
+
+## Ports opened this phase
+
+| Port | Proto | Stack | Exposure |
+|---|---|---|---|
+| 80, 443 | TCP | traefik | LAN / VPN (443 is the front door) |
+| 53 | TCP/UDP | adguard | LAN (internal DNS) |
+| 3000 | TCP | adguard | LAN/Tailscale admin (never forwarded) |
+| 51820 | UDP | wg-easy | **the one** router-forwarded / relayed public port |
+| 51821 | TCP | wg-easy | LAN/Tailscale admin (never forwarded) |

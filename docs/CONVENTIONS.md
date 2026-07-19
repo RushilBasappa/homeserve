@@ -53,9 +53,12 @@ and the Homepage entry. One name, everywhere.
 |---|---|---|---|
 | 80, 443 | TCP | traefik | LAN / VPN (443 is the front door) |
 | 53 | TCP/UDP | adguard | LAN (internal DNS) |
-| 51820 | UDP | wg-easy | router-forwarded → Dell |
+| 3000 | TCP | adguard | LAN/Tailscale admin — never router-forwarded |
+| 51820 | UDP | wg-easy | **the one** public port — router-forwarded → Dell |
+| 51821 | TCP | wg-easy | LAN/Tailscale admin — never router-forwarded |
 
-_(Table grows as stacks land in later phases.)_
+_(Live as of Phase 3. HTTP apps publish **no** host ports — reached only via
+Traefik; the "no host ports for HTTP apps" rule held. Table grows as stacks land.)_
 
 ---
 

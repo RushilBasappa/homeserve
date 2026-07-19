@@ -22,3 +22,15 @@ value = "10.0.0.70"
 name = "MAC_LAN_IP"
 description = "LAN address of ragnaforge-mac (stateless compute node)."
 value = "10.0.0.71"
+
+# --- Phase 3: Edge, DNS & TLS (research R12) ---
+
+[[variable]]
+name = "VPN_HOSTNAME"
+description = "Public hostname of the secondary WireGuard VPN (wg-easy WG_HOST); tracked on the current public IP by Cloudflare DDNS, or pointed at the relay VPS on the NO-GO path."
+value = "vpn.ragnaforge.xyz"
+
+[[variable]]
+name = "ACME_EMAIL"
+description = "Let's Encrypt ACME account email for expiry notices — non-secret, merged into Traefik's cert resolver via a CLI arg. Not the same as any admin credential."
+value = "rushil.basappa@gmail.com"

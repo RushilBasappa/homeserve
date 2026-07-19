@@ -30,7 +30,7 @@
         name: ssh
         state: reloaded
 
-- name: Configure the Dell as NFS server + subnet router
+- name: Configure the Dell as NFS server + subnet router + edge host
   hosts: dell
   become: true
   tasks:
@@ -40,10 +40,18 @@
     - name: NFS server & export
       ansible.builtin.import_tasks: tasks/nfs-server.yml
 
+    - name: Free :53 for AdGuard (disable systemd-resolved stub listener)
+      ansible.builtin.import_tasks: tasks/edge-dns.yml
+
   handlers:
     - name: Reapply NFS exports
       ansible.builtin.command: exportfs -ra
       changed_when: true
+
+    - name: Restart systemd-resolved
+      ansible.builtin.systemd:
+        name: systemd-resolved
+        state: restarted
 
 - name: Configure the Mac as NFS client
   hosts: mac

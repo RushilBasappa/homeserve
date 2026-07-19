@@ -1,0 +1,37 @@
+# cloudflare-ddns — keep vpn.ragnaforge.xyz on the home's current public IP
+# (research R4; data-model §5).
+#
+# Residential Xfinity has a DYNAMIC public IP; the secondary VPN's endpoint name
+# must track it (FR-011, FR-023, SC-008). This tiny stateless container updates
+# ONLY the A record for vpn.ragnaforge.xyz, and only when the IP actually changed
+# (no needless updates). Reuses the existing CLOUDFLARE_API_TOKEN (research R12).
+#
+# PROXIED=false — WireGuard is UDP and cannot traverse Cloudflare's HTTP proxy.
+#
+# NOTE: on the relay (US8 NO-GO) path this stack is UNNECESSARY — the VPS has a
+# static IP and vpn.ragnaforge.xyz points at it instead.
+
+services:
+  cloudflare-ddns:
+    image: favonia/cloudflare-ddns:1
+    container_name: cloudflare-ddns
+    restart: unless-stopped
+    # Recommended hardening from the image's docs — it only needs egress.
+    user: "1000:1000"
+    read_only: true
+    cap_drop:
+      - all
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      # DNS-edit-scoped Cloudflare token, referenced as ${VAR} (FR-014).
+      CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN}
+      # The single dynamic record this phase needs; app names resolve internally
+      # via AdGuard, so no other public A records exist.
+      DOMAINS: ${VPN_HOSTNAME}
+      # WireGuard/UDP must NOT go through Cloudflare's proxy.
+      PROXIED: "false"
+      # The VPN endpoint is IPv4; skip AAAA to avoid needless IPv6 churn.
+      IP6_PROVIDER: none
+      # Check every 5 minutes; updates only on change (SC-008).
+      UPDATE_CRON: "@every 5m"

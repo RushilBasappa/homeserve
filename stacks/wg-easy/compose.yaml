@@ -1,0 +1,56 @@
+# wg-easy — the secondary WireGuard VPN for family/friends (research R6, R9;
+# contract remote-access; data-model §7).
+#
+# The ONLY public exposure in the whole fleet: exactly one port, 51820/udp,
+# router-forwarded to the Dell (GO path) or DNAT'd by the relay VPS (NO-GO path).
+# Non-technical users onboard with a simple .conf / QR from the admin UI (incl.
+# Fire TV file import). It pushes the internal resolver (10.0.0.70) and the LAN
+# subnet route to clients, so a remote device resolves + reaches apps exactly like
+# a LAN device (FR-018) → the same friendly HTTPS names, the same wildcard cert.
+#
+# Admin UI (51821/tcp) is published for LAN/Tailscale only and is NEVER
+# router-forwarded (FR-016). Only 51820/udp is ever exposed publicly (FR-015).
+#
+# HOST PRE-REQ: net.ipv4.ip_forward=1 on the Dell (provision/tasks/sysctl.yml,
+# already applied in Phase 1); wg-easy manages its own NAT/MASQUERADE.
+#
+# State: wg-easy-config (server + client keys) on the Dell volume.
+
+services:
+  wg-easy:
+    image: ghcr.io/wg-easy/wg-easy:14
+    container_name: wg-easy
+    restart: unless-stopped
+    environment:
+      # Public endpoint name clients dial; tracked by DDNS (GO) or the VPS (NO-GO).
+      WG_HOST: ${VPN_HOSTNAME}
+      # Admin password as a BCRYPT HASH (never plaintext); from the gitignored
+      # .mise.toml. The hash's own `$` chars are safe here because the value comes
+      # from the env, not a literal in this file (no $$ escaping needed).
+      PASSWORD_HASH: ${WG_EASY_PASSWORD_HASH}
+      # Push AdGuard to clients so *.ragnaforge.xyz resolves over the tunnel.
+      WG_DEFAULT_DNS: ${DELL_LAN_IP}
+      # Route the LAN subnet through the tunnel so clients reach the Dell/edge at
+      # 10.0.0.70 (R9). Split-tunnel: only 10.0.0.0/24 goes over the VPN.
+      WG_ALLOWED_IPS: 10.0.0.0/24
+      # The public WireGuard port and the LAN-only admin UI port.
+      WG_PORT: "51820"
+      PORT: "51821"
+    ports:
+      # THE one public port (router-forwarded / relayed).
+      - "51820:51820/udp"
+      # Admin UI — LAN/Tailscale only; NEVER forwarded to the internet.
+      - "51821:51821/tcp"
+    volumes:
+      - wg-easy-config:/etc/wireguard
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    sysctls:
+      # Required for the container to forward + NAT tunnel traffic onto the LAN.
+      net.ipv4.ip_forward: "1"
+      net.ipv4.conf.all.src_valid_mark: "1"
+
+volumes:
+  # Local named volume on the Dell (golden rule: client keys are state → the Dell).
+  wg-easy-config:

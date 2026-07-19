@@ -1,0 +1,40 @@
+# tasks/edge-dns.yml — free :53 on the Dell for AdGuard Home (Phase 3, research R3).
+#
+# Debian's systemd-resolved holds 127.0.0.53:53 via its DNS stub listener, which
+# collides with AdGuard binding :53. Disabling ONLY the stub listener frees the
+# port while keeping systemd-resolved managing the host's own name resolution
+# (its real upstreams live in /run/systemd/resolve/resolv.conf). Scoped to the
+# Dell — the Mac is not a resolver.
+#
+# Manual equivalent (documented in docs/runbooks/phase3-edge.md):
+#   printf '[Resolve]\nDNSStubListener=no\n' \
+#     | sudo tee /etc/systemd/resolved.conf.d/99-adguard.conf
+#   sudo ln -sf /run/systemd/resolve/resolv.conf /etc/resolv.conf
+#   sudo systemctl restart systemd-resolved
+---
+- name: Ensure the resolved drop-in directory exists
+  ansible.builtin.file:
+    path: /etc/systemd/resolved.conf.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Disable the systemd-resolved DNS stub listener (frees :53 for AdGuard)
+  ansible.builtin.copy:
+    dest: /etc/systemd/resolved.conf.d/99-adguard.conf
+    content: |
+      # Managed by Ansible (provision/tasks/edge-dns.yml) — free :53 for AdGuard.
+      [Resolve]
+      DNSStubListener=no
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart systemd-resolved
+
+- name: Point /etc/resolv.conf at the resolved-managed file (not the 127.0.0.53 stub)
+  ansible.builtin.file:
+    src: /run/systemd/resolve/resolv.conf
+    dest: /etc/resolv.conf
+    state: link
+    force: true

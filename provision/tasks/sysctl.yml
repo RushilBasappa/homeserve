@@ -1,5 +1,6 @@
-# tasks/sysctl.yml — persist IPv4 forwarding on the Dell (the future VPN subnet
-# router / wg-easy endpoint, Phase 7).
+# tasks/sysctl.yml — persist IPv4 forwarding on the Dell (the VPN subnet router /
+# wg-easy endpoint). Enabled in Phase 1; RELIED ON from Phase 3, where wg-easy
+# NATs family/friend tunnel traffic onto the LAN (research R6 / T006).
 #
 # A drop-in under /etc/sysctl.d survives reboots and package updates and is
 # cleaner than editing /etc/sysctl.conf directly (research.md R5). Scoped to the
