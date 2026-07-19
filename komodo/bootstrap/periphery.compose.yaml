@@ -29,8 +29,9 @@ services:
       # Each secret a Periphery-run stack compose references as ${VAR} MUST be
       # forwarded here so it lands in the agent's process env; the `docker compose`
       # Periphery runs for a stack then inherits it. Non-secret config
-      # (hostnames/IPs) uses Komodo's [[VAR]] interpolation instead and does NOT
-      # belong here.
+      # (hostnames/IPs) is inlined as a literal in the stack compose — Komodo does
+      # NOT interpolate [[VAR]] into git-pulled compose content in this setup — so
+      # it does NOT belong here either.
       # Present so a Periphery-run compose can resolve ${WHOAMI_TEST_SECRET}.
       WHOAMI_TEST_SECRET: ${WHOAMI_TEST_SECRET}
       # Phase 3 (edge): Traefik DNS-01 + Cloudflare DDNS.

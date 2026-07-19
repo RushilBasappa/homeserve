@@ -47,8 +47,10 @@ What this does:
 > in `komodo/bootstrap/periphery.compose.yaml`'s `environment:` (that is how it
 > reaches the Periphery-run `docker compose`), then `make sync-secrets` +
 > **recreate Periphery** so the new env takes effect. Non-secret config
-> (hostnames/IPs) uses Komodo `[[VAR]]` interpolation from `komodo/variables.toml`
-> instead. Forgetting the forward = `${VAR}` resolves empty at deploy.
+> (hostnames/IPs) is **inlined as a literal** in the stack compose — Komodo does
+> NOT interpolate `[[VAR]]` into git-pulled compose content here (confirmed: the
+> DDNS deploy got the literal `[[VPN_HOSTNAME]]`). Forgetting the forward =
+> `${VAR}` resolves empty at deploy.
 
 **Checkpoint:** `traefik` network exists; `sudo ss -lunp | grep :53` shows nothing
 bound; `sysctl net.ipv4.ip_forward` = 1.

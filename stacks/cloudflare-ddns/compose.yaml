@@ -27,9 +27,12 @@ services:
       # DNS-edit-scoped Cloudflare token, referenced as ${VAR} (FR-014).
       CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN}
       # The single dynamic record this phase needs; app names resolve internally
-      # via AdGuard, so no other public A records exist. Non-secret → Komodo
-      # variable interpolation ([[VPN_HOSTNAME]] from komodo/variables.toml).
-      DOMAINS: "[[VPN_HOSTNAME]]"
+      # via AdGuard, so no other public A records exist. Inlined (non-secret
+      # constant): Komodo does NOT interpolate [[VAR]] into git-pulled compose
+      # content in this setup (sync include_variables=false), and it's not a mise
+      # secret — so a literal is the reliable choice. Value tracked for reference
+      # in komodo/variables.toml (VPN_HOSTNAME).
+      DOMAINS: "vpn.ragnaforge.xyz"
       # WireGuard/UDP must NOT go through Cloudflare's proxy.
       PROXIED: "false"
       # The VPN endpoint is IPv4; skip AAAA to avoid needless IPv6 churn.
