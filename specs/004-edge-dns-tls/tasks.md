@@ -184,7 +184,7 @@ external UDP-51820 reachability, DDNS resolution); inconclusive ⇒ NO-GO (no fa
 within the configured interval; an unchanged IP makes no needless update. (SC-008)
 
 - [X] T028 [US6] Create `stacks/cloudflare-ddns/compose.yaml` (favonia/cloudflare-ddns): `CLOUDFLARE_API_TOKEN=${CLOUDFLARE_API_TOKEN}`, `DOMAINS=vpn.ragnaforge.xyz`, `PROXIED=false`, interval; stateless (research R4; data-model §5)
-- [ ] T029 [US6] ⏳ **operator** — Declaration DONE in `komodo/stacks.toml`; remaining: deploy from Core; verify `vpn.ragnaforge.xyz` updates to the current public IP (quickstart Scenario 5; SC-008). NOTE: on the relay (US8 NO-GO) path this stack is unnecessary — the VPS IP is static
+- [X] T029 [US6] ✅ **verified 2026-07-19** — cloudflare-ddns deployed; created/updated `vpn.ragnaforge.xyz` A → `76.102.108.83` (the live public IP); confirmed via public resolver. Preflight check #3 now passes. Original — Declare the cloudflare-ddns stack; deploy from Core; verify `vpn.ragnaforge.xyz` updates to the current public IP (quickstart Scenario 5; SC-008). NOTE: on the relay (US8 NO-GO) path this stack is unnecessary — the VPS IP is static
 
 **Checkpoint**: the VPN endpoint name tracks the dynamic home IP.
 
