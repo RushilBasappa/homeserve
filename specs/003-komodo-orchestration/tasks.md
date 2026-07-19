@@ -28,13 +28,18 @@ secret-injection path is confirmed on the **primary** route
 (T017 resolved). As-built steps and deviations are captured in
 [`docs/runbooks/phase2-komodo.md`](../../docs/runbooks/phase2-komodo.md#as-built-notes--first-live-bring-up-2026-07-19).
 
-**Done:** T001–T013, T015–T018, T021, T024, and the MVP (US1) + secret path (US3).
+**Done:** T001–T019, T021, T022, T024 — all four user stories proven live:
+US1 (deploy to a chosen node from Core), US2 (git source of truth — a re-synced
+change reflects in Core, SC-002), US3 (secret from mise, none in git, SC-003), and
+US4 manual-default (SC-004). Node independence (SC-005) verified — with the Mac
+agent stopped, Core reported it `NotOk` and a deploy to the Dell still succeeded.
 
-**Remaining:** **T014** (US2 git-source-of-truth re-sync proof), **T019/T020**
-(US4 manual-default + per-stack webhook), **T023** (node-independence SC-005 +
-state-persistence SC-006 scenarios), and finishing **T022** (host-dependent
-conformance — Core reachable/LAN-only, agents healthy, placement — all observed
-green during bring-up; to be recorded formally).
+**Remaining (2 items):**
+- **T020** — per-stack webhook auto-deploy: **deferred to Phase 3**. A GitHub push
+  webhook needs Core reachable from GitHub's servers; Core is LAN/Tailscale-only
+  until public exposure (Traefik, Phase 3).
+- **T023 state-persistence (SC-006)** — reboot the Dell and confirm Core state
+  survives. **Pending user go-ahead** (disruptive: briefly drops Core/Mongo).
 
 **As-built key deviations:** Periphery serves **https** on :8120 (not http);
 nodes needed **mise installed + repo cloned + `.mise.toml` copied**; first admin
@@ -117,7 +122,7 @@ declared set.
 ### Implementation for User Story 2
 
 - [X] T013 [P] [US2] Create `komodo/variables.toml` with **non-secret** config only (no secret values) to demonstrate git-declared variables (data-model "Variable"; FR-003, FR-006)
-- [ ] T014 [US2] Prove git is the source of truth: change a declared value (e.g. retarget the `whoami` stack, or a variable) in `komodo/`, commit, re-sync, and confirm Core's diff reflects it and applies on confirmation; confirm managed == declared (FR-003; SC-002; quickstart 3) — edits `komodo/stacks.toml`/`komodo/variables.toml`
+- [X] T014 [US2] Prove git is the source of truth: change a declared value (e.g. retarget the `whoami` stack, or a variable) in `komodo/`, commit, re-sync, and confirm Core's diff reflects it and applies on confirmation; confirm managed == declared (FR-003; SC-002; quickstart 3) — edits `komodo/stacks.toml`/`komodo/variables.toml`
 
 **Checkpoint**: Git changes drive the fleet; managed state equals the declaration.
 
@@ -152,8 +157,8 @@ manual trigger; with a per-stack webhook enabled, a push auto-deploys that stack
 
 ### Implementation for User Story 4
 
-- [ ] T019 [US4] Confirm manual-default: commit a change to `stacks/whoami/compose.yaml`, trigger nothing, and verify the running stack is unchanged until a manual sync/deploy (FR-007; SC-004; quickstart 6)
-- [ ] T020 [US4] Enable a per-stack **git webhook** for the `whoami` stack and verify a push auto-deploys **only** that stack; other stacks stay manual (research R6; FR-007) — edits `komodo/stacks.toml`
+- [X] T019 [US4] Confirm manual-default: commit a change to `stacks/whoami/compose.yaml`, trigger nothing, and verify the running stack is unchanged until a manual sync/deploy (FR-007; SC-004; quickstart 6)
+- [ ] T020 [US4] ⚠️ DEFERRED to Phase 3 (webhook needs Core reachable from GitHub; Core is LAN-only until public exposure). Enable a per-stack **git webhook** for the `whoami` stack and verify a push auto-deploys **only** that stack; other stacks stay manual (research R6; FR-007) — edits `komodo/stacks.toml`
 
 **Checkpoint**: Deploys are manual by default, with opt-in per-stack automation.
 
@@ -166,8 +171,8 @@ one-time bring-up, and grow the shareable report. Full behavioral checks require
 the two real hosts + a running Core.
 
 - [X] T021 [P] Create `docs/runbooks/phase2-komodo.md`: bootstrap Core + Periphery, create admin/disable registration, configure the ResourceSync, deploy the test stack, the chosen secret-handling path, and **add/remove a node** (FR-011) — one-time bring-up runbook (SC-007, SC-008; FR-012)
-- [ ] T022 [P] Run the conformance checks in `contracts/orchestration-contract.md` + `contracts/resource-sync-contract.md`: Core up and LAN-only, both servers healthy, `whoami` on the target node only, secret-free grep, manual-default, add/remove-node is a config change (SC-001..SC-006, SC-008)
-- [ ] T023 [P] Run the 8 validation scenarios in `quickstart.md`, including **node independence** (deploy to the Dell while the Mac is offline — SC-005) and **state persistence** (reboot the Dell, confirm Core state intact — SC-006)
+- [X] T022 [P] Run the conformance checks in `contracts/orchestration-contract.md` + `contracts/resource-sync-contract.md`: Core up and LAN-only, both servers healthy, `whoami` on the target node only, secret-free grep, manual-default, add/remove-node is a config change (SC-001..SC-006, SC-008)
+- [ ] T023 [P] Node-independence (SC-005) ✅ done; state-persistence (SC-006, Dell reboot) PENDING user go-ahead. Run the 8 validation scenarios in `quickstart.md`, including **node independence** (deploy to the Dell while the Mac is offline — SC-005) and **state persistence** (reboot the Dell, confirm Core state intact — SC-006)
 - [X] T024 [P] Update `README.md` to record Phase 2: Komodo orchestration live (Core + both agents, git-synced, deploy from one place) (SC-007)
 
 ---
