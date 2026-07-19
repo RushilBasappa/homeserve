@@ -138,8 +138,8 @@ contract `dns-resolution-contract.md`)
 
 - [X] T018 [US4] Create `stacks/adguard/compose.yaml`: AdGuard Home, ports `53/tcp`+`53/udp` on the Dell, `adguard-conf`+`adguard-work` volumes; admin UI bound **LAN/Tailscale-only** (not the public port) (research R3; data-model §4; FR-016)
 - [X] T019 [US4] Configure AdGuard: DNS **rewrite** `*.ragnaforge.xyz → 10.0.0.70`, upstream resolvers (Quad9/Cloudflare, DNSSEC), and ad/tracker blocklists; capture config in the stack (or document first-run steps + `ADGUARD_ADMIN_PASSWORD`) (research R3; FR-008/010)
-- [ ] T020 [US4] ⏳ **operator** — Declaration DONE in `komodo/stacks.toml` (→ `ragnaforge-dell`); remaining: deploy from Core (data-model §11; FR-013)
-- [ ] T021 [US4] ⏳ **operator** — Point a test device's DNS at `10.0.0.70`; verify `*.ragnaforge.xyz → 10.0.0.70`, a public domain resolves, an ad domain is blocked, and `https://whoami.ragnaforge.xyz` now loads with **no** hosts override (quickstart Scenario 2; SC-005). Remove the temporary hosts override from T013
+- [X] T020 [US4] ✅ **verified 2026-07-19** — adguard deployed from Core; `:53` (tcp+udp) + `:3000` up. Config applied via `scripts/adguard-setup.sh` (API-driven, secret-free) — replaces the manual wizard (T019). (data-model §11; FR-013)
+- [X] T021 [US4] ✅ **verified 2026-07-19** — against `10.0.0.70`: every `*.ragnaforge.xyz → 10.0.0.70`, `example.com` resolves, `doubleclick.net → 0.0.0.0` (blocked), and `https://whoami.ragnaforge.xyz` loads over the trusted cert with **no** hosts override. (Network-wide rollout = point the xFi DHCP DNS at `10.0.0.70` — operator step.) Original — Point a test device's DNS at `10.0.0.70`; verify `*.ragnaforge.xyz → 10.0.0.70`, a public domain resolves, an ad domain is blocked, and `https://whoami.ragnaforge.xyz` now loads with **no** hosts override (quickstart Scenario 2; SC-005). Remove the temporary hosts override from T013
 
 **Checkpoint**: friendly names resolve network-wide; ad-blocking active.
 
