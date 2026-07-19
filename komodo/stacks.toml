@@ -4,9 +4,12 @@
 # ResourceSync reconciles the live stacks against this file.
 #
 # `repo` points at this repository's GitHub remote
-# (git@github.com:RushilBasappa/homeserve.git). Komodo pulls the compose from
-# there. If the repo is private, add a Komodo git account/token for `RushilBasappa`
-# in Core (Settings → Git Accounts) so the pull authenticates.
+# (git@github.com:RushilBasappa/homeserve.git). Komodo pulls the compose over
+# https. The repo is PUBLIC, so `git_account` is intentionally omitted — Komodo
+# clones anonymously. (Setting a git_account makes Komodo require a token for it,
+# which fails on a public repo with no token configured.) If the repo is ever
+# made private, add a Komodo git account/token for `RushilBasappa` in Core
+# (Settings → Git Accounts) and set `git_account = "RushilBasappa"` here.
 
 [[stack]]
 name = "whoami"
@@ -18,10 +21,9 @@ tags = ["phase-2"]
 # Retarget to "ragnaforge-dell" to demonstrate a git-driven change (US2 / T014).
 server = "ragnaforge-mac"
 
-# Pull the compose from this git repo (GitHub).
+# Pull the compose from this git repo (GitHub, public — anonymous clone).
 repo = "RushilBasappa/homeserve"
 git_provider = "github.com"
-git_account = "RushilBasappa"
 branch = "main"
 file_paths = ["stacks/whoami/compose.yaml"]
 
