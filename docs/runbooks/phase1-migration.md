@@ -106,9 +106,11 @@ starting state and performs no cleanup of leftovers.
 
 ## 6. Provision — `make provision` (FR-007)
 
-From the repo root, with a filled-in `.mise.toml` (at least `TAILSCALE_AUTHKEY`):
+From the repo root, with a filled-in `.mise.toml` (`TAILSCALE_AUTHKEY` **and**
+`ANSIBLE_BECOME_PASSWORD` — see the appendix):
 
 ```sh
+make deps               # first time only — installs the ansible.posix collection
 make provision          # both nodes — or `make provision-dell` for one
 ```
 
@@ -132,3 +134,71 @@ Confirm the restored data is **readable** (open Immich, unlock Vaultwarden, load
 a budget, check Home Assistant history, confirm the \*arr libraries). Only once
 everything reads back correctly is the migration complete — zero data loss
 (SC-001), zero remaining k3s (SC-006).
+
+---
+
+## Appendix — Phase 1 implementation notes (as-built)
+
+Context the design docs don't capture: decisions and gotchas found while running
+`make provision` against the real Dell and Mac. Recorded so the next person (or
+future me) isn't surprised.
+
+### Environment as-built
+
+- **OS:** Debian **13 "trixie"** on both nodes (system `python3.13`). The playbook
+  avoids version-specific hacks, so 12 "bookworm" also works.
+- **Connection / admin:** single account — the operator's own `rushil`. Ansible
+  connects as `rushil` over the existing `~/.ssh/ragnaforge-cluster` key
+  (referenced by path in `group_vars/all.yml`; only the public half is committed).
+  There is **no separate `admin` account**; `admin_user: rushil`.
+- **Nodes:** `ragnaforge-dell` 10.0.0.70 (NFS server + subnet router),
+  `ragnaforge-mac` 10.0.0.71 (stateless NFS client).
+
+### Secrets (both from the gitignored `.mise.toml`, injected via `mise`)
+
+- `TAILSCALE_AUTHKEY` — Tailscale enrollment.
+- `ANSIBLE_BECOME_PASSWORD` — the nodes have **password** sudo (not passwordless),
+  so this is required for `make provision` to escalate non-interactively. It's read
+  by `ansible_become_password` via an env lookup — never on a command line.
+- Run `mise trust` once in the repo, or `mise` won't render `[env]` (this silently
+  yields an empty auth key / "Missing sudo password").
+
+### Reaching the clean starting state
+
+- These boxes were wiped **in place** with `scripts/cleanup-all.sh --yes` rather
+  than reinstalled (step 5, in-place option). It removes k3s (official uninstaller),
+  Docker, `/srv/nfs` data, and caches while keeping SSH. Freed ~140 GB → ~2 GB on
+  the Dell.
+
+### Gotchas fixed during bring-up (already reflected in `provision/`)
+
+- **Stale `/etc/exports`:** the old k3s NFS server left exports for
+  `/srv/nfs/{media,shared,photos}`; after the data wipe those paths were gone and
+  `exportfs -ra` failed. The in-place cleanup empties `/srv/nfs` but does **not**
+  touch `/etc/exports` — clear stale export lines by hand (or on a fresh install
+  this can't happen).
+- **NFS didn't mount without a reboot:** `ansible.posix.mount state=present` only
+  writes `/etc/fstab`; the client task now also reloads systemd and enables the
+  `srv-nfs.automount` unit so it's active immediately.
+- **Mac couldn't write the export:** `/srv/nfs` was `nobody:nogroup`; under
+  `root_squash` a client can't write. The server task now owns it `rushil:rushil`
+  `0775`. (`rushil` is uid 1000 on both nodes, so the mapping lines up.)
+- **Non-idempotent mountpoint:** once mounted, `/srv/nfs` on the Mac is the
+  server-owned NFS root, so enforcing a mode chmod'd it and failed — the mountpoint
+  task no longer sets a mode; `boot: false` matches `noauto`.
+
+### Config / warnings
+
+- `ansible.cfg` (repo root, auto-loaded): `interpreter_python = auto_silent`
+  (quiets the remote system-python discovery warning) and
+  `deprecation_warnings = False` (silences `ansible.posix` internal deprecations;
+  our own tasks are clean — rely on `ansible-lint` to catch new ones).
+- Collections are declared in `provision/requirements.yml` and installed by
+  `make deps` (the `provision*` targets depend on it).
+
+### Verified end state (both nodes)
+
+`make provision` twice → `changed=0` (idempotent) · `docker run --rm hello-world`
+runs (rootless — `rushil` is in the `docker` group) · Mac reads **and writes**
+`/srv/nfs` over NFS · `ip_forward=1` on the Dell · `sshd`: password & root login
+disabled · Tailscale up, each node sees the other.
