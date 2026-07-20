@@ -2,8 +2,9 @@
 # stacks/plex/configure/setup.yml — PLANE 3 (application setup), co-located with the
 # plex stack, run POST-DEPLOY, idempotently. Plex is deployed + CLAIMED by Komodo
 # (PLEX_CLAIM on first run); this play does the rest from code: add the Movies/TV
-# libraries and enable Intel QuickSync HW transcode (operator has Plex Pass). Same
-# pattern as the jellyfin/seerr setup plays.
+# libraries, enable Intel QuickSync HW transcode (operator has Plex Pass), and
+# advertise the custom access URL so bridge-network Plex is reachable by LAN and
+# WireGuard/Tailscale clients. Same pattern as the jellyfin/seerr setup plays.
 #
 # AUTH: PLEX_TOKEN (the claimed server's owner token) is read off the running server
 # after claim and stored in the workstation .mise.toml. On a clean rebuild, re-read
@@ -19,6 +20,13 @@
   vars:
     plex_url: "https://plex.ragnaforge.xyz"
     plex_token: "{{ lookup('env', 'PLEX_TOKEN') }}"
+    # The reachable URL clients must use to connect. Plex runs on a bridge network
+    # behind Traefik (no host-network mode), so it can only advertise its unreachable
+    # Docker-internal IP by default. This URL is what AdGuard resolves (→10.0.0.70)
+    # for LAN AND WireGuard/Tailscale clients alike, so a remote device (e.g. a Fire
+    # TV on wg-easy) reaches the server exactly like a LAN device and gets direct
+    # play instead of falling back to Plex Relay.
+    plex_custom_url: "https://plex.ragnaforge.xyz:443"
     # Library paths as seen INSIDE the plex container (compose maps
     # /srv/nfs/media -> /media:ro).
     movies_path: "/media/movies"
@@ -83,8 +91,16 @@
           X-Plex-Token: "{{ plex_token }}"
         status_code: [200]
 
+    - name: Advertise the custom access URL so clients connect over Traefik/WireGuard (upsert; idempotent)
+      ansible.builtin.uri:
+        url: "{{ plex_url }}/:/prefs?customConnections={{ plex_custom_url | urlencode }}"
+        method: PUT
+        headers:
+          X-Plex-Token: "{{ plex_token }}"
+        status_code: [200]
+
     - name: Summary
       ansible.builtin.debug:
         msg: >-
-          Plex ready: Movies+TV libraries present, QuickSync HW transcode enabled.
-          Re-runs are no-ops.
+          Plex ready: Movies+TV libraries present, QuickSync HW transcode enabled,
+          custom access URL advertised ({{ plex_custom_url }}). Re-runs are no-ops.
