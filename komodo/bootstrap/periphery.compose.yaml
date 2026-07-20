@@ -21,10 +21,20 @@ services:
       # Core reaches the agent here over LAN/Tailscale. Not router-forwarded.
       - "8120:8120"
     environment:
-      # Must equal Core's KOMODO_PASSKEY (both from mise-rendered env).
+      # Passkey Core presents to this agent. Core sends KOMODO_PASSKEY; PERIPHERY
+      # reads PERIPHERY_PASSKEYS (NOT KOMODO_PASSKEY — that var is Core-side only).
+      # Set both: PERIPHERY_PASSKEYS is the one the agent actually authenticates with
+      # (KOMODO_PASSKEY kept only for backward-compat / clarity).
       KOMODO_PASSKEY: ${KOMODO_PASSKEY}
+      PERIPHERY_PASSKEYS: ${KOMODO_PASSKEY}
       # Working root for repos Komodo pulls and stack projects it writes.
       PERIPHERY_ROOT_DIRECTORY: /etc/komodo
+      # PERSIST the agent's login keypair on the komodo-periphery-root volume
+      # (/etc/komodo), NOT the image default /config/keys (ephemeral). Without this,
+      # every container RECREATE regenerates the keypair → Core's pinned public key
+      # no longer matches → server goes NotOk until the new key is re-accepted
+      # (UpdateServerPublicKey). Pinning it here makes recreates non-breaking.
+      PERIPHERY_PRIVATE_KEY: file:/etc/komodo/keys/periphery.key
       # --- Stack secrets forwarded from the mise-rendered env (research R4) ---
       # Each secret a Periphery-run stack compose references as ${VAR} MUST be
       # forwarded here so it lands in the agent's process env; the `docker compose`
