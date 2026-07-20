@@ -50,7 +50,7 @@
 - [X] T001 [P] Create the Phase-5 runbook skeleton `docs/runbooks/phase5-media.md` with sections: `Bring-up order`, `Proton egress + killswitch (leak test)`, `Port-forward sync`, `Delete drill (six surfaces)`, `Wiring re-run (idempotent)`, `RAM headroom gate`, `Verification evidence (SC-001..011)` (mirrors the Phase 1–4 runbook style)
 - [X] T002 [P] Add new secret placeholders to `.mise.toml.example` per `contracts/stack-inventory.md` → `RADARR_API_KEY`, `SONARR_API_KEY`, `PROWLARR_API_KEY`, `BAZARR_API_KEY` (each `openssl rand -hex 16`), `PLEX_CLAIM` (from plex.tv/claim, first-run), `QBIT_WEBUI_PASSWORD`; note that `WIREGUARD_PRIVATE_KEY`/`WIREGUARD_ADDRESSES` are **reused** for Gluetun→Proton (no new VPN secret)
 - [X] T003 [P] Add shared non-secret variables to `komodo/variables.toml` → `MEDIA_PUID=1000`, `MEDIA_PGID=1000`, `MEDIA_TZ` (e.g. `America/Los_Angeles`), consumed by every media stack
-- [ ] T004 Fill the real values in the gitignored `.mise.toml` (from `.mise.toml.example`) and run `make sync-secrets` to push them to both nodes (depends on T002)
+- [X] T004 Fill the real values in the gitignored `.mise.toml` (from `.mise.toml.example`) and run `make sync-secrets` to push them to both nodes (depends on T002)
 
 **Checkpoint**: runbook exists; deterministic keys defined and synced to the nodes.
 
@@ -65,7 +65,7 @@
 - [X] T005 Create `stacks/arr/compose.yaml` (Dell) per `contracts/stack-inventory.md` + research R2/R8/R9: `gluetun` (`VPN_SERVICE_PROVIDER=protonvpn`, `VPN_TYPE=wireguard`, `VPN_PORT_FORWARDING=on`, `VPN_PORT_FORWARDING_PROVIDER=protonvpn`, native `VPN_PORT_FORWARDING_UP_COMMAND` POSTing the port to qBittorrent's API), `qbittorrent` (`network_mode: "service:gluetun"`, WebUI localhost-bypass), `prowlarr`, `radarr`, `sonarr`, `bazarr`, `unpackerr`, `configarr`. Set `RADARR__AUTH__APIKEY=${RADARR_API_KEY}` (+ Sonarr/Prowlarr equivalents), `PUID/PGID/TZ`, NFS mounts (whole `/srv/nfs` tree **RW**), Traefik labels for each UI, **explicit image tags** (no `:latest`)
 - [X] T006 [P] Create `stacks/arr/README.md` documenting the stack, the egress model, and the port-sync mechanism (per convention step 10)
 - [X] T007 Declare the `arr` stack in `komodo/stacks.toml` (`server = "ragnaforge-dell"`, `repo`/`branch`/`file_paths = ["stacks/arr/compose.yaml"]`, `webhook_enabled = false`), matching the existing edge-stack entries
-- [ ] T008 Deploy `arr` via Komodo; confirm every container is healthy, Gluetun's tunnel is up (Proton exit IP), and qBittorrent's WebUI is reachable through Gluetun at `qbittorrent.ragnaforge.xyz`
+- [X] T008 Deploy `arr` via Komodo; confirm every container is healthy, Gluetun's tunnel is up (Proton exit IP), and qBittorrent's WebUI is reachable through Gluetun at `qbittorrent.ragnaforge.xyz`
 - [X] T009 Create `stacks/arr/configure/wire.yml` — an **idempotent** Ansible `uri` play implementing `contracts/wiring.md` edges 1–4, 8–9, 11–12 (qBittorrent → Radarr/Sonarr download client; Radarr/Sonarr → Prowlarr applications; Bazarr → Radarr/Sonarr), GET-then-POST so a re-run is a no-op; fail loudly on API rejection
 - [ ] T010 Run `stacks/arr/configure/wire.yml` **after** the arr apps are healthy (keys pinned); confirm a second run reports **no changes** (idempotent — SC-011 precondition)
 - [ ] T011 Add at least one torrent indexer in Prowlarr and confirm Prowlarr **native app-sync** propagated it into Radarr and Sonarr (edge 6 — no play step); record in the runbook
@@ -82,7 +82,7 @@
 **Independent Test**: `quickstart.md` Scenarios 1, 2, 3, 6 — request→play with zero manual handling; VPN killswitch leaks nothing; port-forward stays synced; import is a hardlink.
 
 - [X] T013 [P] [US1] Create `stacks/jellyfin/compose.yaml` (Dell) — `/dev/dri` QuickSync passthrough, `jellyfin-config` volume, `/srv/nfs/media` **RO**, `PUID/PGID/TZ`, Traefik labels; declare it in `komodo/stacks.toml` (Dell)
-- [ ] T014 [US1] Deploy `jellyfin`; complete first-run (admin), add **Movies** (`/srv/nfs/media/movies`) and **TV** (`/srv/nfs/media/tv`) libraries; confirm HW transcode uses QuickSync
+- [X] T014 [US1] Deploy `jellyfin`; complete first-run (admin), add **Movies** (`/srv/nfs/media/movies`) and **TV** (`/srv/nfs/media/tv`) libraries; confirm HW transcode uses QuickSync
 - [X] T015 [P] [US1] Create `stacks/seerr/compose.yaml` (Dell) — `seerr-config` volume, Traefik labels; declare it in `komodo/stacks.toml` (Dell)
 - [ ] T016 [US1] Deploy `seerr`; connect Seerr → Jellyfin (backend) and Seerr → Radarr/Sonarr (`contracts/wiring.md` edges 8–10) using the pinned keys / admin login (extend `wire.yml` or Seerr setup); confirm a Seerr request reaches Radarr/Sonarr
 - [ ] T017 [US1] Add Homepage entries and verify valid TLS for `jellyfin` and `seerr`

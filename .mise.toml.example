@@ -114,3 +114,12 @@ PLEX_CLAIM = "changeme-plex-claim-token"
 # Generate each with e.g. `openssl rand -hex 32`.
 JELLYSTAT_DB_PASSWORD = "changeme-jellystat-db-password"
 JELLYSTAT_JWT_SECRET  = "changeme-jellystat-jwt-secret"
+
+# Shared media login — ONE username/password used across the media tools that need
+# a login (Jellyfin admin; Seerr owner is created from the Jellyfin admin; can also
+# be reused for qBittorrent / Jellystat). Consumed by the first-run Ansible plays
+# (stacks/*/configure/*.yml), NOT by any container, so it is not forwarded to
+# Periphery and needs no `make sync-secrets`. Choose a password YOU will type on
+# TVs/phones (>=8 chars).
+MEDIA_ADMIN_USER     = "changeme-media-admin-username"
+MEDIA_ADMIN_PASSWORD = "changeme-media-admin-password"

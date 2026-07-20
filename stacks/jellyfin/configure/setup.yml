@@ -1,0 +1,192 @@
+---
+# stacks/jellyfin/configure/setup.yml — PLANE 3 (application setup), co-located with
+# the jellyfin stack, run POST-DEPLOY, idempotently. Automates the first-run wizard so
+# a clean rebuild reproduces the server from code (spec FR-023/SC-011 — no manual
+# clicks). Same pattern as stacks/arr/configure/wire.yml.
+#
+# What it does (each step guarded so a re-run is a no-op):
+#   1. Complete the Jellyfin startup wizard — create the admin from mise creds.
+#   2. Add the Movies (/media/movies) and TV (/media/tv) libraries.
+#   3. Enable Intel QuickSync (QSV) hardware transcoding on /dev/dri.
+#
+# CREDS: MEDIA_ADMIN_USER / MEDIA_ADMIN_PASSWORD (the one shared media login) come
+# from the workstation's gitignored .mise.toml (this play runs on the workstation,
+# like wire.yml — the creds are NOT container env, so they need no Periphery
+# forwarding / sync-secrets).
+#
+# RUN:  cd stacks/jellyfin/configure && mise exec -- ansible-playbook setup.yml
+# A schema change after a major Jellyfin upgrade fails the play loudly (visible),
+# never a silent half-configured server.
+
+- name: Jellyfin first-run setup (plane 3)
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    jf_url: "https://jellyfin.ragnaforge.xyz"
+    admin_user: "{{ lookup('env', 'MEDIA_ADMIN_USER') }}"
+    admin_pass: "{{ lookup('env', 'MEDIA_ADMIN_PASSWORD') }}"
+    # Library mount points AS SEEN INSIDE the jellyfin container (compose maps
+    # /srv/nfs/media -> /media:ro).
+    movies_path: "/media/movies"
+    tv_path: "/media/tv"
+    # Header used only for the initial username/password authentication.
+    emby_auth_header: 'MediaBrowser Client="ansible-setup", Device="ansible", DeviceId="ansible-setup", Version="1.0.0"'
+
+  tasks:
+    - name: Require admin credentials in the environment
+      ansible.builtin.assert:
+        that:
+          - admin_user | length > 0
+          - admin_pass | length >= 8
+        fail_msg: >-
+          Set MEDIA_ADMIN_USER and MEDIA_ADMIN_PASSWORD (>=8 chars) in
+          .mise.toml and run under `mise exec --`.
+
+    - name: Read server public info (is the startup wizard done?)
+      ansible.builtin.uri:
+        url: "{{ jf_url }}/System/Info/Public"
+        method: GET
+        status_code: 200
+        return_content: true
+      register: jf_public
+
+    # --- 1. Startup wizard (only when not yet completed) --------------------
+    - name: Complete the startup wizard
+      when: not (jf_public.json.StartupWizardCompleted | default(false))
+      block:
+        - name: Seed initial configuration
+          ansible.builtin.uri:
+            url: "{{ jf_url }}/Startup/Configuration"
+            method: POST
+            body_format: json
+            body:
+              UICulture: en-US
+              MetadataCountryCode: US
+              PreferredMetadataLanguage: en
+            status_code: [200, 204]
+
+        - name: Read the (empty) first user
+          ansible.builtin.uri:
+            url: "{{ jf_url }}/Startup/User"
+            method: GET
+            status_code: 200
+
+        - name: Create the admin user
+          ansible.builtin.uri:
+            url: "{{ jf_url }}/Startup/User"
+            method: POST
+            body_format: json
+            body:
+              Name: "{{ admin_user }}"
+              Password: "{{ admin_pass }}"
+            status_code: [200, 204]
+
+        - name: Remote access on, no UPnP port mapping
+          ansible.builtin.uri:
+            url: "{{ jf_url }}/Startup/RemoteAccess"
+            method: POST
+            body_format: json
+            body:
+              EnableRemoteAccess: true
+              EnableAutomaticPortMapping: false
+            status_code: [200, 204]
+
+        - name: Finish the wizard
+          ansible.builtin.uri:
+            url: "{{ jf_url }}/Startup/Complete"
+            method: POST
+            status_code: [200, 204]
+
+    # --- 2. Authenticate as the admin (for library + encoding config) ------
+    - name: Authenticate by name
+      ansible.builtin.uri:
+        url: "{{ jf_url }}/Users/AuthenticateByName"
+        method: POST
+        headers:
+          X-Emby-Authorization: "{{ emby_auth_header }}"
+        body_format: json
+        body:
+          Username: "{{ admin_user }}"
+          Pw: "{{ admin_pass }}"
+        status_code: 200
+        return_content: true
+      register: jf_auth
+      no_log: true
+
+    - name: Set auth token fact
+      ansible.builtin.set_fact:
+        jf_token: "{{ jf_auth.json.AccessToken }}"
+
+    # --- 3. Libraries (idempotent: skip if the name already exists) --------
+    - name: List existing libraries
+      ansible.builtin.uri:
+        url: "{{ jf_url }}/Library/VirtualFolders"
+        method: GET
+        headers:
+          X-Emby-Token: "{{ jf_token }}"
+        status_code: 200
+        return_content: true
+      register: jf_libs
+
+    - name: Add the Movies library
+      ansible.builtin.uri:
+        url: "{{ jf_url }}/Library/VirtualFolders?name=Movies&collectionType=movies&refreshLibrary=true"
+        method: POST
+        headers:
+          X-Emby-Token: "{{ jf_token }}"
+        body_format: json
+        body:
+          LibraryOptions:
+            PathInfos:
+              - Path: "{{ movies_path }}"
+        status_code: [200, 204]
+      when: "'Movies' not in (jf_libs.json | map(attribute='Name') | list)"
+
+    - name: Add the TV library
+      ansible.builtin.uri:
+        url: "{{ jf_url }}/Library/VirtualFolders?name=TV&collectionType=tvshows&refreshLibrary=true"
+        method: POST
+        headers:
+          X-Emby-Token: "{{ jf_token }}"
+        body_format: json
+        body:
+          LibraryOptions:
+            PathInfos:
+              - Path: "{{ tv_path }}"
+        status_code: [200, 204]
+      when: "'TV' not in (jf_libs.json | map(attribute='Name') | list)"
+
+    # --- 4. QuickSync (QSV) hardware transcoding ----------------------------
+    - name: Read current encoding options
+      ansible.builtin.uri:
+        url: "{{ jf_url }}/System/Configuration/encoding"
+        method: GET
+        headers:
+          X-Emby-Token: "{{ jf_token }}"
+        status_code: 200
+        return_content: true
+      register: jf_enc
+
+    - name: Enable Intel QuickSync HW transcode (upsert; idempotent)
+      ansible.builtin.uri:
+        url: "{{ jf_url }}/System/Configuration/encoding"
+        method: POST
+        headers:
+          X-Emby-Token: "{{ jf_token }}"
+        body_format: json
+        body: >-
+          {{ jf_enc.json | combine({
+            'HardwareAccelerationType': 'qsv',
+            'EnableHardwareEncoding': true,
+            'HardwareDecodingCodecs': ['h264', 'hevc', 'vc1'],
+            'EnableTonemapping': true
+          }) }}
+        status_code: [200, 204]
+
+    - name: Summary
+      ansible.builtin.debug:
+        msg: >-
+          Jellyfin ready: admin '{{ admin_user }}' created, Movies+TV libraries
+          present, QuickSync (qsv) enabled. Re-runs are no-ops.
