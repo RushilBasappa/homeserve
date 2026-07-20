@@ -20,6 +20,13 @@
 6. **US4 (P2, RAM-gated)** → Plex + Jellystat → prove **dual-server on one library + stats**.
 7. **Polish** → reachability, reproducible-wiring proof, secret/state sanity, docs.
 
+## ✅ PHASE 5 COMPLETE (2026-07-20)
+
+Code-complete, deployed, and proven live: request → download (Proton egress) →
+library → **Plex playback on TV**. The hands-on SC-001…011 behavioral drills were
+**moved to PLAN.md → Phase 14** (operator's call) to run later; they are marked
+`[~]` below so nothing in this phase dangles.
+
 ## Implementation status (reconciled against the live fleet, 2026-07-20)
 
 Audited directly from the running nodes (`docker ps` on Dell + Mac, each app's API
@@ -31,22 +38,17 @@ through Traefik). See `docs/runbooks/phase5-media.md` → "Live-state audit".
   Radarr/Sonarr; Radarr's download client is qBittorrent-via-Gluetun; a custom quality
   profile is applied. Every deployed UI answers through Traefik with a valid cert.
   → T004–T017, T034–T037 done; T043 (secret/state sanity) verified.
-- **NOT yet deployed** (these stacks' `compose.yaml` exist but no container is running):
-  `maintainerr` (US2 → T023–T026), `media-helpers` byparr/cleanuparr/huntarr on the Mac
-  (US3 → T030–T033), `jellystat` (US4 stats → T038–T040).
-- **Behavioural verification DEFERRED to PLAN.md → Phase 14** (operator's call,
-  2026-07-20). Phase 5 is **code-complete and deployed**; the hands-on SC-001..011
-  drills are parked as a dedicated late phase to run when there's time to babysit a
-  download + delete. Deferred tasks: request→play (T018 — **core path already
-  confirmed working: request→download→Plex playback on TV, 2026-07-20**),
-  killswitch/no-leak (T019), port-sync (T020), hardlink (T021), the manual "remove"
-  collection + delete drills (T023 remainder, T025, T026), Configarr CF match (T028 —
-  profile present but custom formats = 0, so partial), dual-server play (T040),
-  reachability SC-010 (T041), wiring-reproducible SC-011 (T042), and the capstone
-  consolidation/sign-off (T045). Left `[ ]` here as the source-of-truth checklist; see
-  Phase 14 for the framing.
-- Phasing enforces the RAM gate: **T034 passed (Plex is live alongside Jellyfin)**;
-  P2 remainder (maintainerr, helpers, jellystat) + behavioural drills are what's left.
+- **`maintainerr` deployed** (3.18.0) with Radarr/Sonarr/Seerr + Plex wired from code
+  (`stacks/maintainerr/configure/setup.yml`); the manual "remove" collection is a UI
+  policy choice folded into the Phase 14 delete drill.
+- **Descoped stacks** (removed 2026-07-20, not part of the deliverable):
+  `media-helpers` byparr/cleanuparr/huntarr (T029–T033) and `jellystat` (T037–T038).
+- **Behavioural SC-001..011 drills → PLAN.md Phase 14** (T018–T021, T023 remainder,
+  T025, T026, T028, T040, T041, T042, T045), marked `[~]` below. Core path already
+  confirmed live (request→download→Plex playback on TV). Configarr custom formats
+  live = 0 today (T028) is the one real gap Phase 14 closes.
+- **RAM gate passed** (T034 — Plex is live alongside Jellyfin). Everything in scope is
+  deployed; only the deferred Phase 14 drills remain.
 
 ---
 
@@ -93,10 +95,10 @@ through Traefik). See `docs/runbooks/phase5-media.md` → "Live-state audit".
 - [X] T015 [P] [US1] Create `stacks/seerr/compose.yaml` (Dell) — `seerr-config` volume, Traefik labels; declare it in `komodo/stacks.toml` (Dell)
 - [X] T016 [US1] Deploy `seerr`; connect Seerr → Jellyfin (backend) and Seerr → Radarr/Sonarr (`contracts/wiring.md` edges 8–10) using the pinned keys / admin login (extend `wire.yml` or Seerr setup); confirm a Seerr request reaches Radarr/Sonarr
 - [X] T017 [US1] Add Homepage entries and verify valid TLS for `jellyfin` and `seerr` — *live: Homepage entries present + both answer through Traefik with a valid cert (2026-07-20 audit)*
-- [ ] T018 [US1] Run `quickstart.md` Scenario 1 (request one movie → download → import → play in Jellyfin); record evidence in the runbook (SC-001, FR-001/002/005)
-- [ ] T019 [US1] Run `quickstart.md` Scenario 2 (stop `gluetun`; confirm qBittorrent egresses **nothing** over the home line and the observed IP was only Proton; restart → auto-resume); record (SC-002, FR-003)
-- [ ] T020 [US1] Run `quickstart.md` Scenario 3 (qBittorrent shows connectable/open port = Proton's forwarded port; restart `gluetun`; confirm the listen port auto-re-syncs); record (SC-002a, FR-003a)
-- [ ] T021 [US1] Run `quickstart.md` Scenario 6 (compare inode/link-count of library file vs `downloads/complete` file — same inode = hardlink; no double disk); record (SC-006, FR-004)
+- [~] T018 [→P14] [US1] Run `quickstart.md` Scenario 1 (request one movie → download → import → play in Jellyfin); record evidence in the runbook (SC-001, FR-001/002/005)
+- [~] T019 [→P14] [US1] Run `quickstart.md` Scenario 2 (stop `gluetun`; confirm qBittorrent egresses **nothing** over the home line and the observed IP was only Proton; restart → auto-resume); record (SC-002, FR-003)
+- [~] T020 [→P14] [US1] Run `quickstart.md` Scenario 3 (qBittorrent shows connectable/open port = Proton's forwarded port; restart `gluetun`; confirm the listen port auto-re-syncs); record (SC-002a, FR-003a)
+- [~] T021 [→P14] [US1] Run `quickstart.md` Scenario 6 (compare inode/link-count of library file vs `downloads/complete` file — same inode = hardlink; no double disk); record (SC-006, FR-004)
 
 **Checkpoint**: MVP — request→play works with private egress and hardlink imports. Demoable.
 
@@ -111,10 +113,10 @@ through Traefik). See `docs/runbooks/phase5-media.md` → "Live-state audit".
 > Depends on US1 (needs media in the library and the Jellyfin/Seerr connections to cascade into).
 
 - [X] T022 [P] [US2] Create `stacks/maintainerr/compose.yaml` (Dell) — `maintainerr-config` volume, Traefik labels; declare it in `komodo/stacks.toml` (Dell)
-- [ ] T023 [US2] Deploy `maintainerr`; connect Maintainerr → Radarr, Sonarr, Jellyfin, Seerr, qBittorrent (`contracts/wiring.md` edges 13–16); create the manual **"remove"** collection; ensure **no** age/watch/disk rules exist (FR-008) — *DONE 2026-07-20: deployed (3.18.0) + connections wired **from code** via `stacks/maintainerr/configure/setup.yml` (idempotent Ansible): media server = **Plex** (edge 14 corrected — Maintainerr is Plex-native, not Jellyfin), Radarr/Sonarr/Seerr attached & tested OK. Remaining = the manual **"remove" collection** (a policy choice, made in the UI) + optional qBittorrent download-client (edge 16, deferred). No age/watch/disk rules exist (default).*
+- [~] T023 [→P14] [US2] Deploy `maintainerr`; connect Maintainerr → Radarr, Sonarr, Jellyfin, Seerr, qBittorrent (`contracts/wiring.md` edges 13–16); create the manual **"remove"** collection; ensure **no** age/watch/disk rules exist (FR-008) — *DONE 2026-07-20: deployed (3.18.0) + connections wired **from code** via `stacks/maintainerr/configure/setup.yml` (idempotent Ansible): media server = **Plex** (edge 14 corrected — Maintainerr is Plex-native, not Jellyfin), Radarr/Sonarr/Seerr attached & tested OK. Remaining = the manual **"remove" collection** (a policy choice, made in the UI) + optional qBittorrent download-client (edge 16, deferred). No age/watch/disk rules exist (default).*
 - [X] T024 [US2] Add a Homepage entry and verify valid TLS for `maintainerr` — *live: Homepage entry present + maintainerr answers HTTPS 200 via Traefik (2026-07-20)*
-- [ ] T025 [US2] Run `quickstart.md` Scenario 4 — seed a title present on **all six** surfaces, add it to "remove", and verify per `contracts/deletion-cascade.md` that disk/qBittorrent/arr/Jellyfin/Plex(after scan)/Seerr are all cleared with **zero** orphans; re-run the add → no error/no change (SC-003, SC-005, FR-006/007/009/010)
-- [ ] T026 [US2] Run `quickstart.md` Scenario 5 — confirm nothing is deleted without an explicit add over an observation window (SC-004, FR-008)
+- [~] T025 [→P14] [US2] Run `quickstart.md` Scenario 4 — seed a title present on **all six** surfaces, add it to "remove", and verify per `contracts/deletion-cascade.md` that disk/qBittorrent/arr/Jellyfin/Plex(after scan)/Seerr are all cleared with **zero** orphans; re-run the add → no error/no change (SC-003, SC-005, FR-006/007/009/010)
+- [~] T026 [→P14] [US2] Run `quickstart.md` Scenario 5 — confirm nothing is deleted without an explicit add over an observation window (SC-004, FR-008)
 
 **Checkpoint**: the headline capability works — one manual action cleanly removes a title everywhere.
 
@@ -129,7 +131,7 @@ through Traefik). See `docs/runbooks/phase5-media.md` → "Live-state audit".
 > Depends on the Foundational backbone (arr stack), not on US1/US2.
 
 - [X] T027 [P] [US3] Author `stacks/arr/configarr/config.yml` — TRaSH quality profiles + custom formats for Radarr and Sonarr (`contracts/wiring.md` edge 7)
-- [ ] T028 [US3] Enable/run Configarr against Radarr/Sonarr; run `quickstart.md` Scenario 9 (profiles match; second run idempotent); record (SC-009, FR-011)
+- [~] T028 [→P14] [US3] Enable/run Configarr against Radarr/Sonarr; run `quickstart.md` Scenario 9 (profiles match; second run idempotent); record (SC-009, FR-011)
 - [~] T029 [P] [US3] ~~Create `stacks/media-helpers/compose.yaml`~~ — **DESCOPED / REMOVED 2026-07-20**: the whole media-helpers stack (byparr/cleanuparr; huntarr already dropped) deleted at operator's request — unused. Stack dir + Komodo/Homepage/Traefik-route/CONVENTIONS refs all removed; Mac containers torn down.
 - [~] T030 [US3] ~~Deploy `media-helpers` + wire Byparr/Cleanuparr~~ — **DESCOPED** (stack removed)
 - [~] T031 [US3] ~~Homepage + TLS for byparr/cleanuparr~~ — **DESCOPED** (entries removed)
@@ -159,7 +161,7 @@ through Traefik). See `docs/runbooks/phase5-media.md` → "Live-state audit".
 - [~] T037 [P] [US4] ~~Create `stacks/jellystat/compose.yaml`~~ — **DESCOPED** (Jellystat removed; stack dir + Komodo/Homepage/secret refs deleted 2026-07-20)
 - [~] T038 [US4] ~~Deploy `jellystat`; connect to Jellyfin; confirm stats~~ — **DESCOPED** (Plex stats handled by Tautulli in PLAN Phase 6)
 - [X] T039 [US4] Add Homepage entry and verify valid TLS for `plex` — *live: Homepage entry present + plex answers through Traefik with a valid cert (2026-07-20 audit)*
-- [ ] T040 [US4] Run `quickstart.md` Scenario 8 (same title plays from Jellyfin **and** Plex; one on-disk copy) — stats clause dropped with Jellystat; record (SC-008, FR-015/017)
+- [~] T040 [→P14] [US4] Run `quickstart.md` Scenario 8 (same title plays from Jellyfin **and** Plex; one on-disk copy) — stats clause dropped with Jellystat; record (SC-008, FR-015/017)
 
 **Checkpoint**: dual-server library + stats — the full stack the operator scoped.
 
@@ -167,11 +169,11 @@ through Traefik). See `docs/runbooks/phase5-media.md` → "Live-state audit".
 
 ## Phase 7: Polish & Cross-Cutting Concerns
 
-- [ ] T041 Run `quickstart.md` Scenario 10 — confirm 100% of UIs load with valid TLS and appear on Homepage; record (SC-010, FR-019)
-- [ ] T042 Run `quickstart.md` Scenario 11 — on a clean re-run of `stacks/arr/configure/wire.yml`, confirm all inter-app connections are present from code with **no** manual clicks, the run is idempotent, and **Buildarr was not used**; record (SC-011, FR-023/023a/024)
+- [~] T041 [→P14] Run `quickstart.md` Scenario 10 — confirm 100% of UIs load with valid TLS and appear on Homepage; record (SC-010, FR-019)
+- [~] T042 [→P14] Run `quickstart.md` Scenario 11 — on a clean re-run of `stacks/arr/configure/wire.yml`, confirm all inter-app connections are present from code with **no** manual clicks, the run is idempotent, and **Buildarr was not used**; record (SC-011, FR-023/023a/024)
 - [X] T043 [P] Secret/state sanity — `git grep` confirms no secret values committed (only `${VAR}` refs + `.mise.toml.example` placeholders); confirm **no** app config lives under `/srv/nfs`; confirm the Mac holds **no** persistent media state (golden rule) (FR-018/020/021) — *live: only `env`/`lookup` refs; `/srv/nfs` = downloads/media/photos only; Mac runs only Periphery (2026-07-20 audit)*
 - [X] T044 [P] Add a **"Three configuration planes"** section to `docs/CONVENTIONS.md` (machine `provision/` · deployment Komodo · application `stacks/*/configure/`, post-deploy) and grow the ports/URL tables for the new stacks (spec FR-023a)
-- [ ] T045 Consolidate all `quickstart.md` evidence under `Verification evidence` in `docs/runbooks/phase5-media.md`, update this file's **Implementation status**, and mark the Phase 5 deliverable done in `PLAN.md` / `README.md` (matching how Phases 1–4 recorded completion)
+- [~] T045 [→P14] Consolidate all `quickstart.md` evidence under `Verification evidence` in `docs/runbooks/phase5-media.md`, update this file's **Implementation status**, and mark the Phase 5 deliverable done in `PLAN.md` / `README.md` (matching how Phases 1–4 recorded completion)
 
 ---
 

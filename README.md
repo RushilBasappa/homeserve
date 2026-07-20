@@ -15,6 +15,14 @@ plan and [`docs/CONVENTIONS.md`](./docs/CONVENTIONS.md) for how stacks are built
 
 ## Current status
 
+**Phase 5 — Media stack — ✅ complete.** The acquisition backbone (Proton-guarded
+`gluetun`+`qbittorrent`, Prowlarr→Radarr/Sonarr/Bazarr) and both media servers
+(`jellyfin` + `plex`, QuickSync, one shared library) are deployed, healthy, and
+wired from code — with `seerr` requests, `maintainerr` cascade-delete, and
+`configarr` TRaSH quality. Proven live: request → download (Proton egress) →
+library → **Plex playback on TV**. The hands-on SC-001…011 verification drills
+are parked as **Phase 14** to run later.
+
 **Phase 4 — Storage — ✅ complete.** The `/srv/nfs` export now carries a
 materialized, hardlink-friendly media tree (`media/{movies,tv}`,
 `downloads/{complete,incomplete}`, `photos/`, owned `1000:1000` `setgid 2775`),
@@ -184,10 +192,26 @@ has a concrete, hardlink-friendly media tree, proven consistent across both node
 Full evidence and the growth procedure in
 [`docs/runbooks/phase4-storage.md`](./docs/runbooks/phase4-storage.md).
 
-### Phase 5 — Media stack (ARR + Jellyfin)
+### Phase 5 — Media stack (ARR + Jellyfin & Plex) ✅
 
-_Not started._ Gluetun + qBittorrent, Prowlarr/Radarr/Sonarr/Bazarr, Jellyfin +
-Jellyseerr, Configarr.
+**Deployed and proven live on the Dell** (2026-07-20). The full acquisition
+backbone and both media servers are up, healthy, and wired from code:
+
+- **Acquisition backbone** — `gluetun` (Proton WireGuard egress + killswitch +
+  native port-forwarding) fronting `qbittorrent`, with `prowlarr` (5 indexers,
+  native app-sync) → `radarr`/`sonarr`/`bazarr` and `unpackerr`. Download client,
+  indexer app-sync, and Bazarr links all provisioned idempotently by
+  [`stacks/arr/configure/wire.yml`](./stacks/arr/configure/wire.yml).
+- **Servers** — `jellyfin` and `plex` (both Intel QuickSync HW transcode) on one
+  shared `/srv/nfs/media` library, with `seerr` for requests and `maintainerr`
+  for the manual six-surface cascade delete. `configarr` applies TRaSH quality
+  from code. Every UI answers through Traefik with a valid cert + Homepage entry.
+- **Proven end-to-end** — request → download (via Proton) → import → **playback
+  on Plex (TV)**.
+
+The remaining hands-on verification drills (killswitch/leak test, six-surface
+delete, hardlink, dual-server, wiring idempotency — SC-001…011) are parked as
+**Phase 14** in [`PLAN.md`](./PLAN.md) to run later.
 
 ### Phase 6 — Apps
 

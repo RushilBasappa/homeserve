@@ -151,8 +151,11 @@ everything else drops into.
   when media outgrows the internal disk.
 - **Deliverable:** consistent `/media` + config layout. **Depends on:** Phase 1.
 
-### Phase 5 — Media stack (ARR + Jellyfin & Plex)
+### Phase 5 — Media stack (ARR + Jellyfin & Plex) ✅
 **Objective:** downloadable, interconnected media over a VPN egress.
+> **✅ complete (2026-07-20)** — code-complete, deployed, and proven live:
+> request → download (Proton egress) → library → **Plex playback on TV**. The
+> hands-on SC-001…011 verification drills are parked in **Phase 14**.
 - **Gluetun** (WireGuard egress + killswitch) → **qBittorrent** routed through it.
 - **Prowlarr** → **Radarr** / **Sonarr** / **Bazarr** (subtitles).
 - **Jellyfin** & **Plex** (both QuickSync HW transcode, one shared `/srv/nfs/media`
