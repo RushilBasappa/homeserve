@@ -1,9 +1,14 @@
 # seerr — the single request front door (research R4; US1). Dell-only (stateful).
 #
-# The 2026 merge of Overseerr + Jellyseerr (seerr-team/seerr). ONE instance:
-# backend = Jellyfin (account-free, always on), fulfilment = the shared Radarr/Sonarr.
-# Requests are media-server-agnostic — files it triggers are imported once and seen
-# by both Jellyfin AND Plex, so tracking availability from Jellyfin is sufficient.
+# NOTE: research.md named a hypothetical "seerr-team/seerr" 2026 merge that does NOT
+# exist as an image. The real, maintained tool this describes is JELLYSEERR
+# (fallenbagel/jellyseerr) — the Jellyfin-compatible Overseerr fork. Same role, same
+# port (5055), same config path. Kept the stack/subdomain name `seerr`.
+#
+# ONE instance: backend = Jellyfin (account-free, always on), fulfilment = the shared
+# Radarr/Sonarr. Requests are media-server-agnostic — files it triggers are imported
+# once and seen by both Jellyfin AND Plex, so tracking availability from Jellyfin is
+# sufficient.
 #
 # STATE: seerr-config is a local named volume on the Dell (golden rule).
 # WIRING (see runbook + stacks/arr/configure/wire.yml): connect Seerr → Jellyfin
@@ -14,7 +19,7 @@
 
 services:
   seerr:
-    image: ghcr.io/seerr-team/seerr:1.0.0
+    image: fallenbagel/jellyseerr:2.5.2
     container_name: seerr
     restart: unless-stopped
     environment:
