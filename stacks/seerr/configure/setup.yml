@@ -66,6 +66,14 @@
         return_content: true
       register: seerr_plex
 
+    - name: Finalize setup (mark Seerr initialized)
+      ansible.builtin.uri:
+        url: "{{ seerr_url }}/api/v1/settings/initialize"
+        method: POST
+        headers:
+          Cookie: "{{ seerr_auth.cookies_string }}"
+        status_code: 200
+
     - name: Confirm session + read main settings (incl. API key)
       ansible.builtin.uri:
         url: "{{ seerr_url }}/api/v1/settings/main"
