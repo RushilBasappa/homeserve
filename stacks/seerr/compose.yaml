@@ -1,9 +1,11 @@
 # seerr — the single request front door (research R4; US1). Dell-only (stateful).
 #
-# NOTE: research.md named a hypothetical "seerr-team/seerr" 2026 merge that does NOT
-# exist as an image. The real, maintained tool this describes is JELLYSEERR
-# (fallenbagel/jellyseerr) — the Jellyfin-compatible Overseerr fork. Same role, same
-# port (5055), same config path. Kept the stack/subdomain name `seerr`.
+# seerr-team/seerr (the Overseerr+Jellyseerr successor) is a REAL project but has no
+# stable release yet, so we run its rolling `:develop` tag. This is a DELIBERATE
+# exception to the "pin explicit tags, no floating" rule — there is no versioned tag
+# to pin; Diun (Phase 10) can watch it. Current digest at time of deploy:
+#   sha256:86c8eb6a47eabfaec07425173d87a3bf15dc1800dfc616c48447ee8fd0e47b1a
+# (pin `develop@sha256:...` if you want reproducibility over rolling updates.)
 #
 # ONE instance: backend = Jellyfin (account-free, always on), fulfilment = the shared
 # Radarr/Sonarr. Requests are media-server-agnostic — files it triggers are imported
@@ -19,7 +21,7 @@
 
 services:
   seerr:
-    image: fallenbagel/jellyseerr:2.5.2
+    image: ghcr.io/seerr-team/seerr:develop
     container_name: seerr
     restart: unless-stopped
     environment:
