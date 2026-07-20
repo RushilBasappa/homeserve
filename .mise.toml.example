@@ -83,3 +83,34 @@ WG_EASY_PASSWORD_HASH = "changeme-wg-easy-bcrypt-hash"
 # log in with. Keep it here so the runbook can reference ${ADGUARD_ADMIN_PASSWORD}
 # without printing a real value into a tracked file.
 ADGUARD_ADMIN_PASSWORD = "changeme-adguard-admin-password"
+
+# --- Phase 5: Media stack (ARR + Jellyfin/Plex) (research R2, R5, R10) ---
+# NOTE: WIREGUARD_PRIVATE_KEY / WIREGUARD_ADDRESSES (above) are REUSED here for
+# Gluetun → Proton VPN — Proton issues a standard WireGuard config, so no new VPN
+# secret is added (research R2). Use a Proton plan WITH port forwarding.
+#
+# Deterministic servarr API keys — the linchpin of declarative plane-3 wiring
+# (research R5). Each app's key is SET from these via env (RADARR__AUTH__APIKEY=...),
+# so every key is known at deploy time and the wiring play is fully reproducible.
+# Generate each as 32 hex chars:  openssl rand -hex 16
+RADARR_API_KEY  = "changeme-radarr-api-key-32hex"
+SONARR_API_KEY  = "changeme-sonarr-api-key-32hex"
+PROWLARR_API_KEY = "changeme-prowlarr-api-key-32hex"
+BAZARR_API_KEY  = "changeme-bazarr-api-key-32hex"
+
+# qBittorrent Web UI password for HUMAN login. Gluetun's native port-sync reaches
+# qBit via localhost-bypass (no creds), so this is only for the operator's UI login.
+# Set it on first run (see docs/runbooks/phase5-media.md → qBittorrent first-run).
+QBIT_WEBUI_PASSWORD = "changeme-qbittorrent-webui-password"
+
+# Plex claim token — SHORT-LIVED (~4 min), from https://www.plex.tv/claim, used ONLY
+# on Plex's first run to bind the server to your account (P2). After first run the
+# server keeps its own token; this value is not needed again. Leave the placeholder
+# until you deploy Plex, then paste a fresh claim-xxxx token and re-sync.
+PLEX_CLAIM = "changeme-plex-claim-token"
+
+# Jellystat (P2, US4) — internal Postgres password + session-signing secret. The DB
+# is never published (jellystat network only), but set a real password anyway.
+# Generate each with e.g. `openssl rand -hex 32`.
+JELLYSTAT_DB_PASSWORD = "changeme-jellystat-db-password"
+JELLYSTAT_JWT_SECRET  = "changeme-jellystat-jwt-secret"

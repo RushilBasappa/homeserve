@@ -1,0 +1,246 @@
+# arr — the acquisition pipeline as ONE deployable unit (research R2, R5, R8, R9;
+# contract stack-inventory + wiring). Dell-only (stateful + on the library disk).
+#
+# gluetun (Proton WireGuard egress, killswitch, NAT-PMP port forwarding)
+#   └── qbittorrent  (shares gluetun's netns — ALL its traffic is inside the tunnel)
+# prowlarr  (indexer manager; native app-sync → radarr/sonarr)
+# radarr / sonarr  (movie / TV PVRs; import as HARDLINKS into /srv/nfs/media)
+# bazarr  (subtitles for radarr/sonarr)
+# unpackerr  (extracts archived releases for the PVRs)
+# configarr  (applies TRaSH quality profiles/custom formats from code — see configarr/)
+#
+# EGRESS MODEL: only qBittorrent egresses, and only via Proton. gluetun's default
+# killswitch means tunnel-down = NO egress (SC-002). qBittorrent's listen port
+# tracks Proton's rotating forwarded port via gluetun's NATIVE up-command below —
+# no cron, no sidecar (research R2). qBit's Web UI is fronted by Traefik on
+# gluetun's netns; the up-command reaches it over localhost (auth-bypassed on
+# localhost — set on first run, see stacks/arr/README.md + the runbook).
+#
+# STATE: every *-config is a LOCAL named volume on the Dell (golden rule). The whole
+# /srv/nfs tree is mounted RW as /data on qbit + the PVRs so downloads/ and media/
+# live under ONE mount → imports are hardlinks, never cross-device copies (SC-006).
+#
+# WIRING: keys are pinned deterministically from mise (RADARR__AUTH__APIKEY=...), so
+# the post-deploy play stacks/arr/configure/wire.yml is fully declarative +
+# idempotent. It runs AFTER these apps are healthy. Buildarr is NOT used (barred).
+#
+# IMAGE TAGS: pinned explicitly (no :latest) per Diun/Phase-10 intent. Bump
+# deliberately; verify against the registry before deploy.
+
+services:
+  # --- Proton egress + killswitch (the tunnel every torrent rides) -------------
+  gluetun:
+    image: qmcgaw/gluetun:v3.40.0
+    container_name: gluetun
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    environment:
+      VPN_SERVICE_PROVIDER: protonvpn
+      VPN_TYPE: wireguard
+      # REUSED Proton WireGuard creds (research R2/R10) — real values only in the
+      # gitignored .mise.toml, forwarded via the Periphery agent env.
+      WIREGUARD_PRIVATE_KEY: ${WIREGUARD_PRIVATE_KEY}
+      WIREGUARD_ADDRESSES: ${WIREGUARD_ADDRESSES}
+      # NAT-PMP port forwarding (Proton) — gluetun keeps qBit's listen port synced.
+      VPN_PORT_FORWARDING: "on"
+      VPN_PORT_FORWARDING_PROVIDER: protonvpn
+      # NATIVE up-command: POST Proton's new forwarded port to qBittorrent's Web API
+      # over localhost (no script file, no sidecar). {{PORTS}} is gluetun's template.
+      VPN_PORT_FORWARDING_UP_COMMAND: >-
+        /bin/sh -c 'wget -qO- --post-data "json={\"listen_port\":{{PORTS}}}"
+        http://127.0.0.1:8080/api/v2/app/setPreferences'
+      # Let containers on other Docker networks (and the LAN) reach services inside
+      # this netns; gluetun auto-detects its connected docker nets, this adds the LAN.
+      FIREWALL_OUTBOUND_SUBNETS: 10.0.0.0/24
+      # Non-secret constant; mirrored in komodo/variables.toml MEDIA_TZ.
+      TZ: America/Los_Angeles
+    networks:
+      # `arr` so the PVRs reach qBit at http://gluetun:8080; `traefik` so the qBit
+      # UI is routed (qbit shares this netns and has no network of its own).
+      - arr
+      - traefik
+    labels:
+      # --- Traefik: qBittorrent's Web UI at qbittorrent.ragnaforge.xyz. The router
+      # lives on gluetun because qbit shares gluetun's network namespace. Container
+      # port 8080 (qbit's WEBUI_PORT below). ---
+      - "traefik.enable=true"
+      - "traefik.http.routers.qbittorrent.rule=Host(`qbittorrent.ragnaforge.xyz`)"
+      - "traefik.http.routers.qbittorrent.entrypoints=websecure"
+      - "traefik.http.routers.qbittorrent.tls=true"
+      - "traefik.http.services.qbittorrent.loadbalancer.server.port=8080"
+
+  # --- Download client (all traffic pinned inside gluetun's tunnel) ------------
+  qbittorrent:
+    image: lscr.io/linuxserver/qbittorrent:5.0.4
+    container_name: qbittorrent
+    restart: unless-stopped
+    # SHARE gluetun's netns → qBit has no egress except through Proton (killswitch).
+    network_mode: "service:gluetun"
+    depends_on:
+      - gluetun
+    environment:
+      # Non-secret constants; mirrored in komodo/variables.toml (MEDIA_PUID/PGID/TZ).
+      PUID: "1000"
+      PGID: "1000"
+      TZ: America/Los_Angeles
+      WEBUI_PORT: "8080"
+    volumes:
+      - qbittorrent-config:/config
+      # Whole tree RW so downloads/ + media/ are one mount → hardlink imports.
+      - /srv/nfs:/data
+    # No `networks:` and no host `ports:` — it lives in gluetun's netns; the UI is
+    # routed by the label on gluetun above.
+
+  # --- Indexer manager (native app-sync propagates indexers to the PVRs) -------
+  prowlarr:
+    image: lscr.io/linuxserver/prowlarr:1.30.2
+    container_name: prowlarr
+    restart: unless-stopped
+    environment:
+      PUID: "1000"
+      PGID: "1000"
+      TZ: America/Los_Angeles
+      # Deterministic API key (research R5) — the linchpin of declarative wiring.
+      PROWLARR__AUTH__APIKEY: ${PROWLARR_API_KEY}
+    volumes:
+      - prowlarr-config:/config
+    networks:
+      - arr
+      - traefik
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.prowlarr.rule=Host(`prowlarr.ragnaforge.xyz`)"
+      - "traefik.http.routers.prowlarr.entrypoints=websecure"
+      - "traefik.http.routers.prowlarr.tls=true"
+      - "traefik.http.services.prowlarr.loadbalancer.server.port=9696"
+
+  # --- Movie PVR ---------------------------------------------------------------
+  radarr:
+    image: lscr.io/linuxserver/radarr:5.21.1
+    container_name: radarr
+    restart: unless-stopped
+    environment:
+      PUID: "1000"
+      PGID: "1000"
+      TZ: America/Los_Angeles
+      RADARR__AUTH__APIKEY: ${RADARR_API_KEY}
+    volumes:
+      - radarr-config:/config
+      - /srv/nfs:/data
+    networks:
+      - arr
+      - traefik
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.radarr.rule=Host(`radarr.ragnaforge.xyz`)"
+      - "traefik.http.routers.radarr.entrypoints=websecure"
+      - "traefik.http.routers.radarr.tls=true"
+      - "traefik.http.services.radarr.loadbalancer.server.port=7878"
+
+  # --- TV PVR ------------------------------------------------------------------
+  sonarr:
+    image: lscr.io/linuxserver/sonarr:4.0.13
+    container_name: sonarr
+    restart: unless-stopped
+    environment:
+      PUID: "1000"
+      PGID: "1000"
+      TZ: America/Los_Angeles
+      SONARR__AUTH__APIKEY: ${SONARR_API_KEY}
+    volumes:
+      - sonarr-config:/config
+      - /srv/nfs:/data
+    networks:
+      - arr
+      - traefik
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.sonarr.rule=Host(`sonarr.ragnaforge.xyz`)"
+      - "traefik.http.routers.sonarr.entrypoints=websecure"
+      - "traefik.http.routers.sonarr.tls=true"
+      - "traefik.http.services.sonarr.loadbalancer.server.port=8989"
+
+  # --- Subtitles ---------------------------------------------------------------
+  bazarr:
+    image: lscr.io/linuxserver/bazarr:1.4.5
+    container_name: bazarr
+    restart: unless-stopped
+    environment:
+      PUID: "1000"
+      PGID: "1000"
+      TZ: America/Los_Angeles
+      # NOTE: Bazarr (Python) stores its API key in config.ini, not via this env in
+      # all versions. wire.yml uses Radarr/Sonarr's deterministic keys to link them
+      # INTO Bazarr; if Bazarr won't honor a pre-set key, the play reads Bazarr's
+      # generated key at runtime (see README — accepted version-sensitivity).
+      BAZARR_API_KEY: ${BAZARR_API_KEY}
+    volumes:
+      - bazarr-config:/config
+      # Same /data view as the PVRs so subtitle paths match the library.
+      - /srv/nfs:/data
+    networks:
+      - arr
+      - traefik
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.bazarr.rule=Host(`bazarr.ragnaforge.xyz`)"
+      - "traefik.http.routers.bazarr.entrypoints=websecure"
+      - "traefik.http.routers.bazarr.tls=true"
+      - "traefik.http.services.bazarr.loadbalancer.server.port=6767"
+
+  # --- Archive extraction (no UI; talks to the PVRs on the arr network) --------
+  unpackerr:
+    image: golift/unpackerr:0.14.5
+    container_name: unpackerr
+    restart: unless-stopped
+    environment:
+      PUID: "1000"
+      PGID: "1000"
+      TZ: America/Los_Angeles
+      # Point Unpackerr at the PVRs with their deterministic keys.
+      UN_RADARR_0_URL: http://radarr:7878
+      UN_RADARR_0_API_KEY: ${RADARR_API_KEY}
+      UN_SONARR_0_URL: http://sonarr:8989
+      UN_SONARR_0_API_KEY: ${SONARR_API_KEY}
+    volumes:
+      # Needs the download tree to find + extract archives before import.
+      - /srv/nfs:/data
+    networks:
+      - arr
+
+  # --- Quality-from-code (TRaSH profiles/custom formats; no UI) ----------------
+  # Applies stacks/arr/configarr/config.yml to Radarr/Sonarr idempotently, then
+  # exits. Re-runs on each deploy (a second run is a no-op) — SC-009. Enable/run it
+  # AFTER the PVRs are healthy (US3, T028).
+  configarr:
+    image: ghcr.io/raydak-labs/configarr:1.13.1
+    container_name: configarr
+    restart: "no"
+    environment:
+      TZ: America/Los_Angeles
+    volumes:
+      # The config is git-tracked and read-only inside the container.
+      - ./configarr:/app/config:ro
+    networks:
+      - arr
+    depends_on:
+      - radarr
+      - sonarr
+
+volumes:
+  # Local named volumes on the Dell (golden rule: config/state → the Dell).
+  qbittorrent-config:
+  prowlarr-config:
+  radarr-config:
+  sonarr-config:
+  bazarr-config:
+
+networks:
+  # Intra-pipeline network (PVRs ↔ prowlarr ↔ gluetun/qbit).
+  arr:
+  # Shared external proxy network (created once on the Dell) — for the UIs.
+  traefik:
+    external: true

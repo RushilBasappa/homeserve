@@ -56,9 +56,17 @@ and the Homepage entry. One name, everywhere.
 | 3000 | TCP | adguard | LAN/Tailscale admin — never router-forwarded |
 | 51820 | UDP | wg-easy | **the one** public port — router-forwarded → Dell |
 | 51821 | TCP | wg-easy | LAN/Tailscale admin — never router-forwarded |
+| 6881 | TCP/UDP | arr (via gluetun) | **outbound only via Proton**; inbound = Proton's forwarded port. **Not** router-forwarded — no home-IP exposure |
+| 8191 | TCP | media-helpers (Mac) | LAN only — Byparr; Prowlarr + Traefik file-route reach it at `10.0.0.71:8191` |
+| 11011 | TCP | media-helpers (Mac) | LAN only — Cleanuparr UI; Traefik file-route |
+| 9705 | TCP | media-helpers (Mac) | LAN only — Huntarr UI; Traefik file-route |
 
-_(Live as of Phase 3. HTTP apps publish **no** host ports — reached only via
-Traefik; the "no host ports for HTTP apps" rule held. Table grows as stacks land.)_
+_(Live as of Phase 3; Phase-5 rows added. HTTP apps on the **Dell** publish **no**
+host ports — reached only via Traefik labels. The Mac helpers publish LAN ports
+because Traefik (Dell-only, label-based) can't see Mac containers; they are fronted
+at `<app>.ragnaforge.xyz` by Traefik's **file** provider → `10.0.0.71:<port>` (see
+`stacks/traefik/compose.yaml`). qBittorrent's peer traffic egresses via Proton, never
+an inbound router forward. Table grows as stacks land.)_
 
 ---
 
@@ -133,6 +141,36 @@ Dell — see [`docs/runbooks/phase4-storage.md`](runbooks/phase4-storage.md#merg
 The NFS export path (and every app mount) stays the same.
 
 ---
+
+## Three configuration planes
+
+Every change to the fleet lands in exactly one of **three separated planes**. Keeping
+them apart is what makes the stack reproducible without one plane's concerns leaking
+into another (spec FR-023a). Never wire an app during provisioning; never bake machine
+setup into a compose file.
+
+| Plane | Operates on | Where it lives | When it runs |
+|---|---|---|---|
+| **Machine** | the OS — Docker, NFS, sysctl, DNS-port freeing | `provision/` (Ansible over SSH) | pre-Docker, per host (`make provision`) |
+| **Deployment** | Compose stacks — images, volumes, networks, Traefik labels | `komodo/stacks.toml` + `stacks/<app>/compose.yaml` | on deploy (Komodo, manual trigger) |
+| **Application** | app HTTP APIs — the inter-app wiring (download clients, indexer sync, request/delete links) | `stacks/<app>/configure/` (idempotent Ansible `uri`) + Configarr | **post-deploy**, after apps are healthy with keys pinned |
+
+Rules:
+
+- **Machine plane is host setup only.** It never touches application config. Phase 5
+  added no machine-plane work — it mounts the Phase-4 `/srv/nfs` tree as-is.
+- **Deployment plane is declarative and secret-free.** Compose references secrets as
+  `${VAR}` (from the mise-rendered Periphery env) and inlines non-secret Komodo
+  variables as literals (Komodo does not interpolate `[[VAR]]` into git-pulled
+  composes — mirror the value and cite `komodo/variables.toml`).
+- **Application plane is co-located, post-deploy, and idempotent.** Wiring lives with
+  its stack (e.g. `stacks/arr/configure/wire.yml`), runs only after the apps are up
+  with their API keys pinned, GET-then-POSTs so a re-run is a no-op, and **fails
+  loudly** on schema drift — never a silent, half-wired stack. No bespoke long-lived
+  scripts; unmaintained declarative tools (e.g. Buildarr) are barred.
+
+The deterministic API keys (set via env from mise) are the linchpin that lets the
+application plane be fully declarative — every key is known before the wiring runs.
 
 ## New-app checklist
 

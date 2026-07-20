@@ -1,0 +1,56 @@
+# plex — the second media server (research R1; US4, RAM-GATED). Dell-only.
+#
+# ⚠️ Do NOT deploy until the RAM headroom gate passes (runbook → T034). Two servers
+# transcoding on the i3-10110U (7.5 GB) can exhaust the iGPU + RAM; if it won't fit,
+# Plex DEFERS to Phase 12 (Mac Mini) per plan Complexity Tracking.
+#
+# Reads the SAME /srv/nfs/media library as Jellyfin (one copy on disk, RO mount).
+# Intel QuickSync HW transcode via /dev/dri (needs Plex Pass). Adds the polished
+# Fire-TV / remote clients for Phase 7 family access.
+#
+# STATE: plex-config is a local named volume on the Dell (golden rule).
+# FIRST-RUN (see runbook): paste a fresh PLEX_CLAIM token (plex.tv/claim, ~4 min
+# TTL), claim the server, add Movies/TV libraries on /media, enable QuickSync.
+#
+# IMAGE TAG: pinned (no :latest) per Diun/Phase-10 intent.
+
+services:
+  plex:
+    image: lscr.io/linuxserver/plex:1.41.6
+    container_name: plex
+    restart: unless-stopped
+    devices:
+      # Intel iGPU → QuickSync HW transcode (shared with Jellyfin; research R1).
+      - /dev/dri:/dev/dri
+    environment:
+      # Non-secret constants; mirrored in komodo/variables.toml (MEDIA_PUID/PGID/TZ).
+      PUID: "1000"
+      PGID: "1000"
+      TZ: America/Los_Angeles
+      VERSION: docker
+      # Short-lived first-run claim token (real value only in the gitignored
+      # .mise.toml). After first run the server keeps its own token; this is unused.
+      PLEX_CLAIM: ${PLEX_CLAIM}
+    volumes:
+      - plex-config:/config
+      # Library, READ-ONLY (the servarr apps are the only writers).
+      - /srv/nfs/media:/media:ro
+    networks:
+      - traefik
+    labels:
+      # --- canonical Traefik routing labels; Plex Web listens on 32400 ---
+      # (Traefik fronts remote/web access at plex.ragnaforge.xyz. Local GDM/DLNA
+      # discovery is not needed for this remote-first use — no host-network mode.)
+      - "traefik.enable=true"
+      - "traefik.http.routers.plex.rule=Host(`plex.ragnaforge.xyz`)"
+      - "traefik.http.routers.plex.entrypoints=websecure"
+      - "traefik.http.routers.plex.tls=true"
+      - "traefik.http.services.plex.loadbalancer.server.port=32400"
+
+volumes:
+  # Local named volume on the Dell (golden rule: library/watch state → the Dell).
+  plex-config:
+
+networks:
+  traefik:
+    external: true

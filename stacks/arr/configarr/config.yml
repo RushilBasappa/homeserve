@@ -1,0 +1,45 @@
+# stacks/arr/configarr/config.yml — quality-from-code (research R5/R6; wiring edge 7).
+#
+# Configarr syncs TRaSH-Guides quality profiles + custom formats into Radarr and
+# Sonarr from THIS file, idempotently (a second run reports no changes — SC-009).
+# This is the ONLY source of truth for quality profiles; they are never hand-entered.
+#
+# The container reaches the PVRs on the `arr` network by service name and
+# authenticates with the deterministic keys from mise via the `!env` tag (no
+# secrets.yml needed). Template IDs below are version-sensitive to the TRaSH/Recyclarr
+# guides — bump deliberately; verify at https://configarr.de and https://trash-guides.info.
+
+trashGuideUrl: https://github.com/TRaSH-Guides/Guides
+recyclarrConfigUrl: https://github.com/recyclarr/config-templates
+
+radarr:
+  radarr-main:
+    base_url: http://radarr:7878
+    # Deterministic key read from the environment at run time (kept out of git).
+    api_key: !env RADARR_API_KEY
+
+    quality_definition:
+      type: movie
+
+    # 1080p-first, transcode-friendly on the i3-10110U (QuickSync). Adjust to taste.
+    include:
+      - template: radarr-quality-definition-movie
+      - template: radarr-quality-profile-hd-bluray-web
+      - template: radarr-custom-formats-hd-bluray-web
+
+    custom_formats: []
+
+sonarr:
+  sonarr-main:
+    base_url: http://sonarr:8989
+    api_key: !env SONARR_API_KEY
+
+    quality_definition:
+      type: series
+
+    include:
+      - template: sonarr-quality-definition-series
+      - template: sonarr-v4-quality-profile-web-1080p
+      - template: sonarr-v4-custom-formats-web-1080p
+
+    custom_formats: []

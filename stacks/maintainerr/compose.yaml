@@ -1,0 +1,49 @@
+# maintainerr — the single manual cascade-delete mechanism (research R3; US2).
+# Dell-only (stateful config).
+#
+# ONE instance, connected to the shared Radarr/Sonarr + qBittorrent + Seerr, with
+# Jellyfin as its reference media server. Deletion is driven by a MANUAL collection:
+# the operator adds a specific title to the "remove" collection → Maintainerr
+# enforces the six-surface cascade (delete files on disk, unmonitor/remove in the
+# PVRs, remove the seeding torrent, clear the Seerr request). Because the FILE is
+# removed, Plex reflects it on its next scan — one instance clears all six surfaces
+# (contract deletion-cascade.md).
+#
+# MANUAL-ONLY (spec FR-008): NO age/watch/disk rules are configured — only the
+# manual "remove" collection. Nothing is ever deleted automatically.
+#
+# STATE: maintainerr-config is a local named volume on the Dell (golden rule).
+# WIRING (see runbook): connect to Radarr/Sonarr/qBittorrent (deterministic keys),
+# Jellyfin (API key minted at wiring time), and Seerr — edges 13–16.
+#
+# IMAGE TAG: pinned (no :latest) per Diun/Phase-10 intent.
+
+services:
+  maintainerr:
+    image: ghcr.io/jorenn92/maintainerr:2.18.1
+    container_name: maintainerr
+    restart: unless-stopped
+    environment:
+      # Non-secret constants; mirrored in komodo/variables.toml (MEDIA_PUID/PGID/TZ).
+      PUID: "1000"
+      PGID: "1000"
+      TZ: America/Los_Angeles
+    volumes:
+      - maintainerr-config:/opt/data
+    networks:
+      - traefik
+    labels:
+      # --- canonical Traefik routing labels; Maintainerr listens on 6246 ---
+      - "traefik.enable=true"
+      - "traefik.http.routers.maintainerr.rule=Host(`maintainerr.ragnaforge.xyz`)"
+      - "traefik.http.routers.maintainerr.entrypoints=websecure"
+      - "traefik.http.routers.maintainerr.tls=true"
+      - "traefik.http.services.maintainerr.loadbalancer.server.port=6246"
+
+volumes:
+  # Local named volume on the Dell (golden rule: collection/config state → the Dell).
+  maintainerr-config:
+
+networks:
+  traefik:
+    external: true

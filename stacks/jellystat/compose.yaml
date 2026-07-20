@@ -1,0 +1,65 @@
+# jellystat — watch statistics for Jellyfin (research R1; US4, P2). Dell-only
+# (stateful: its own Postgres). Deploy alongside Plex once the RAM gate passes.
+#
+# Connects to Jellyfin with an API key minted at wiring time (not a stored secret)
+# and records playback history/stats. Its Postgres holds that history → Dell (golden
+# rule); jellystat-db is the only volume.
+#
+# STATE: jellystat-db (Postgres data) is a local named volume on the Dell.
+# SECRETS (.mise.toml): JELLYSTAT_DB_PASSWORD (internal DB), JELLYSTAT_JWT_SECRET
+# (session signing). See .mise.toml.example (Phase-5 P2 block).
+#
+# IMAGE TAGS: pinned (no :latest) per Diun/Phase-10 intent.
+
+services:
+  jellystat-db:
+    image: postgres:16.4
+    container_name: jellystat-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: jellystat
+      POSTGRES_DB: jfstat
+      # Internal-only DB password (jellystat-db is never published or Traefik-routed).
+      POSTGRES_PASSWORD: ${JELLYSTAT_DB_PASSWORD}
+      TZ: America/Los_Angeles
+    volumes:
+      - jellystat-db:/var/lib/postgresql/data
+    networks:
+      - jellystat
+
+  jellystat:
+    image: ghcr.io/cyfershepard/jellystat:1.1.4
+    container_name: jellystat
+    restart: unless-stopped
+    depends_on:
+      - jellystat-db
+    environment:
+      POSTGRES_USER: jellystat
+      POSTGRES_PASSWORD: ${JELLYSTAT_DB_PASSWORD}
+      POSTGRES_IP: jellystat-db
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: jfstat
+      # Session-token signing secret (real value only in the gitignored .mise.toml).
+      JWT_SECRET: ${JELLYSTAT_JWT_SECRET}
+      TZ: America/Los_Angeles
+    networks:
+      - jellystat
+      - traefik
+    labels:
+      # --- canonical Traefik routing labels; Jellystat listens on 3000 ---
+      - "traefik.enable=true"
+      - "traefik.http.routers.jellystat.rule=Host(`jellystat.ragnaforge.xyz`)"
+      - "traefik.http.routers.jellystat.entrypoints=websecure"
+      - "traefik.http.routers.jellystat.tls=true"
+      - "traefik.http.services.jellystat.loadbalancer.server.port=3000"
+
+volumes:
+  # Local named volume on the Dell (golden rule: stats DB → the Dell).
+  jellystat-db:
+
+networks:
+  # Private network between Jellystat and its Postgres.
+  jellystat:
+  # Shared external proxy network — for the UI only.
+  traefik:
+    external: true

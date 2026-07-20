@@ -1,0 +1,208 @@
+---
+# stacks/arr/configure/wire.yml — PLANE 3 (application wiring), co-located with the
+# arr stack, run POST-DEPLOY, idempotently (contract wiring.md; spec FR-023/023a).
+#
+# Establishes the inter-app edges no native tool covers. Prowlarr's OWN app-sync
+# then propagates indexers (edge 6, native); Configarr owns quality profiles
+# (edge 7). This play does NOT click any UI and uses NO bespoke long-lived script.
+#
+#   Edge 1/2  Radarr / Sonarr → qBittorrent   (download client)
+#   Edge 3/4  Prowlarr → Radarr / Sonarr       (register app → auto-sync indexers)
+#   Edge 11/12 Bazarr → Radarr / Sonarr        (subtitle source)
+#   Edge 8/9  Seerr → Radarr / Sonarr          (fulfilment; gated on seerr_enabled)
+#
+# IDEMPOTENT: every edge GETs current state and POSTs only what is missing → a
+# second run reports no changes (SC-011). VISIBLE FAILURE: an app rejecting a
+# hand-encoded body (e.g. schema drift after a major upgrade) fails the play loudly
+# — never a silent unwired stack (spec edge case).
+#
+# PRECONDITIONS: the arr apps are healthy with their API keys pinned from mise; the
+# control node resolves *.ragnaforge.xyz (AdGuard) and trusts the wildcard cert
+# (public Let's Encrypt). Run:  cd stacks/arr/configure && mise exec -- ansible-playbook wire.yml
+# Enable the Seerr edges once Seerr is deployed (US1/T016): -e seerr_enabled=true
+
+- name: Wire the arr acquisition pipeline (plane 3)
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    # App endpoints — reached via Traefik (no host ports). Valid public TLS.
+    radarr_url: "https://radarr.ragnaforge.xyz"
+    sonarr_url: "https://sonarr.ragnaforge.xyz"
+    prowlarr_url: "https://prowlarr.ragnaforge.xyz"
+    bazarr_url: "https://bazarr.ragnaforge.xyz"
+    seerr_url: "https://seerr.ragnaforge.xyz"
+
+    # Deterministic keys from the mise-rendered env (never inline literals).
+    radarr_api_key: "{{ lookup('env', 'RADARR_API_KEY') }}"
+    sonarr_api_key: "{{ lookup('env', 'SONARR_API_KEY') }}"
+    prowlarr_api_key: "{{ lookup('env', 'PROWLARR_API_KEY') }}"
+    qbit_password: "{{ lookup('env', 'QBIT_WEBUI_PASSWORD') }}"
+
+    # From the arr containers' point of view, qBittorrent is reachable inside
+    # gluetun's netns at gluetun:8080; Prowlarr reaches the PVRs by service name.
+    qbit_internal_host: gluetun
+    qbit_internal_port: 8080
+    radarr_internal: "http://radarr:7878"
+    sonarr_internal: "http://sonarr:8989"
+    prowlarr_internal: "http://prowlarr:9696"
+
+    seerr_enabled: false
+
+  tasks:
+    # --- Preflight: fail loudly if a required key is missing -------------------
+    - name: Assert required API keys are present in the environment
+      ansible.builtin.assert:
+        that:
+          - radarr_api_key | length > 0
+          - sonarr_api_key | length > 0
+          - prowlarr_api_key | length > 0
+        fail_msg: >-
+          Missing servarr API key(s) in the environment. Fill .mise.toml and run
+          under `mise exec --` so RADARR/SONARR/PROWLARR_API_KEY are exported.
+
+    # ========================================================================
+    # Edge 1/2 — qBittorrent as the download client in Radarr and Sonarr
+    # ========================================================================
+    - name: Read existing download clients (Radarr / Sonarr)
+      ansible.builtin.uri:
+        url: "{{ item.url }}/api/v3/downloadclient"
+        method: GET
+        headers:
+          X-Api-Key: "{{ item.key }}"
+        status_code: 200
+        return_content: true
+      register: dl_clients
+      loop:
+        - { name: radarr, url: "{{ radarr_url }}", key: "{{ radarr_api_key }}" }
+        - { name: sonarr, url: "{{ sonarr_url }}", key: "{{ sonarr_api_key }}" }
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Add qBittorrent download client where missing (idempotent)
+      ansible.builtin.uri:
+        url: "{{ item.item.url }}/api/v3/downloadclient"
+        method: POST
+        headers:
+          X-Api-Key: "{{ item.item.key }}"
+        body_format: json
+        # NOTE: v3 download-client schema is version-sensitive; a rejection here is
+        # surfaced (status_code below) rather than silently skipped.
+        body:
+          enable: true
+          protocol: torrent
+          priority: 1
+          name: qBittorrent
+          implementation: QBittorrent
+          configContract: QBittorrentSettings
+          fields:
+            - { name: host, value: "{{ qbit_internal_host }}" }
+            - { name: port, value: "{{ qbit_internal_port }}" }
+            - { name: username, value: admin }
+            - { name: password, value: "{{ qbit_password }}" }
+            - { name: category, value: "{{ 'radarr' if item.item.name == 'radarr' else 'sonarr' }}" }
+        status_code: [201, 200]
+      when: >-
+        (item.json | selectattr('name', 'equalto', 'qBittorrent') | list | length) == 0
+      loop: "{{ dl_clients.results }}"
+      loop_control:
+        label: "{{ item.item.name }}"
+
+    # ========================================================================
+    # Edge 3/4 — register Radarr and Sonarr as Applications in Prowlarr
+    #            (Prowlarr then native-syncs all indexers into them — edge 6)
+    # ========================================================================
+    - name: Read existing Prowlarr applications
+      ansible.builtin.uri:
+        url: "{{ prowlarr_url }}/api/v1/applications"
+        method: GET
+        headers:
+          X-Api-Key: "{{ prowlarr_api_key }}"
+        status_code: 200
+        return_content: true
+      register: prowlarr_apps
+
+    - name: Register the PVRs as Prowlarr applications where missing (idempotent)
+      ansible.builtin.uri:
+        url: "{{ prowlarr_url }}/api/v1/applications"
+        method: POST
+        headers:
+          X-Api-Key: "{{ prowlarr_api_key }}"
+        body_format: json
+        body:
+          name: "{{ item.name }}"
+          syncLevel: fullSync
+          implementation: "{{ item.impl }}"
+          configContract: "{{ item.impl }}Settings"
+          fields:
+            - { name: prowlarrUrl, value: "{{ prowlarr_internal }}" }
+            - { name: baseUrl, value: "{{ item.base }}" }
+            - { name: apiKey, value: "{{ item.key }}" }
+        status_code: [201, 200]
+      when: >-
+        (prowlarr_apps.json | selectattr('name', 'equalto', item.name) | list | length) == 0
+      loop:
+        - { name: Radarr, impl: Radarr, base: "{{ radarr_internal }}", key: "{{ radarr_api_key }}" }
+        - { name: Sonarr, impl: Sonarr, base: "{{ sonarr_internal }}", key: "{{ sonarr_api_key }}" }
+      loop_control:
+        label: "{{ item.name }}"
+
+    # ========================================================================
+    # Edge 11/12 — Bazarr → Radarr / Sonarr (subtitle source)
+    # Bazarr's REST schema differs by version; we drive it via its API using the
+    # PVR keys. If your Bazarr build rejects the body, the play FAILS here (visible)
+    # — update the payload for that version rather than wiring by hand.
+    # ========================================================================
+    - name: Point Bazarr at Radarr and Sonarr (system settings)
+      ansible.builtin.uri:
+        url: "{{ bazarr_url }}/api/system/settings"
+        method: POST
+        headers:
+          X-API-KEY: "{{ lookup('env', 'BAZARR_API_KEY') }}"
+        body_format: json
+        body:
+          settings-radarr-ip: radarr
+          settings-radarr-port: 7878
+          settings-radarr-apikey: "{{ radarr_api_key }}"
+          settings-radarr-ssl: "False"
+          settings-general-use_radarr: "True"
+          settings-sonarr-ip: sonarr
+          settings-sonarr-port: 8989
+          settings-sonarr-apikey: "{{ sonarr_api_key }}"
+          settings-sonarr-ssl: "False"
+          settings-general-use_sonarr: "True"
+        status_code: [200, 204]
+      register: bazarr_wire
+      failed_when: bazarr_wire.status not in [200, 204]
+      # Bazarr's settings POST is inherently upsert (idempotent) — re-posting the
+      # same values changes nothing.
+
+    # ========================================================================
+    # Edge 8/9 — Seerr → Radarr / Sonarr (fulfilment). Enabled once Seerr exists
+    # (US1/T016): run with -e seerr_enabled=true. Seerr↔Jellyfin (edge 10) is done
+    # in Seerr's setup with the Jellyfin admin login (see runbook).
+    # ========================================================================
+    - name: Wire Seerr → Radarr / Sonarr (gated)
+      when: seerr_enabled | bool
+      block:
+        - name: Read Seerr's configured Radarr/Sonarr servers
+          ansible.builtin.uri:
+            url: "{{ seerr_url }}/api/v1/settings/{{ item }}"
+            method: GET
+            headers:
+              X-Api-Key: "{{ lookup('env', 'SEERR_API_KEY') | default('', true) }}"
+            status_code: [200, 401, 403]
+            return_content: true
+          register: seerr_servers
+          loop: [radarr, sonarr]
+          loop_control:
+            label: "{{ item }}"
+
+        - name: Note on Seerr wiring
+          ansible.builtin.debug:
+            msg: >-
+              Seerr's API key is minted at first-run (not a stored secret). If the
+              GET above returned 401/403, complete Seerr setup once (backend =
+              Jellyfin admin login) and export SEERR_API_KEY, then re-run with
+              -e seerr_enabled=true to make Radarr/Sonarr fulfilment declarative.

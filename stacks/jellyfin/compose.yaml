@@ -1,0 +1,46 @@
+# jellyfin — the primary/reference media server (research R1; US1). Dell-only:
+# stateful (library + watch DB) AND on the box with the iGPU and the library disk.
+#
+# Free, account-free, always-on. Reads the SAME /srv/nfs/media library as Plex (one
+# copy on disk, RO mount). Intel QuickSync HW transcode via /dev/dri passthrough.
+#
+# STATE: jellyfin-config is a local named volume on the Dell (golden rule).
+# FIRST-RUN (see runbook): create the admin, add Movies (/media/movies) + TV
+# (/media/tv) libraries, and enable Intel QuickSync (VA-API) HW transcoding.
+#
+# IMAGE TAG: pinned (no :latest) per Diun/Phase-10 intent.
+
+services:
+  jellyfin:
+    image: jellyfin/jellyfin:10.10.7
+    container_name: jellyfin
+    restart: unless-stopped
+    devices:
+      # Intel iGPU → QuickSync HW transcode (research R1). Same device Plex uses.
+      - /dev/dri:/dev/dri
+    environment:
+      # Non-secret constants; mirrored in komodo/variables.toml (MEDIA_PUID/PGID/TZ).
+      PUID: "1000"
+      PGID: "1000"
+      TZ: America/Los_Angeles
+    volumes:
+      - jellyfin-config:/config
+      # Library, READ-ONLY (the servarr apps are the only writers).
+      - /srv/nfs/media:/media:ro
+    networks:
+      - traefik
+    labels:
+      # --- canonical Traefik routing labels; Jellyfin listens on 8096 ---
+      - "traefik.enable=true"
+      - "traefik.http.routers.jellyfin.rule=Host(`jellyfin.ragnaforge.xyz`)"
+      - "traefik.http.routers.jellyfin.entrypoints=websecure"
+      - "traefik.http.routers.jellyfin.tls=true"
+      - "traefik.http.services.jellyfin.loadbalancer.server.port=8096"
+
+volumes:
+  # Local named volume on the Dell (golden rule: library/watch state → the Dell).
+  jellyfin-config:
+
+networks:
+  traefik:
+    external: true

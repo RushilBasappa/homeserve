@@ -23,6 +23,12 @@ configs:
         Apps:
           style: row
           columns: 4
+        Media:
+          style: row
+          columns: 4
+        Acquisition:
+          style: row
+          columns: 4
   homepage-services:
     content: |
       - Infrastructure:
@@ -43,6 +49,60 @@ configs:
               icon: traefik.png
               href: https://whoami.ragnaforge.xyz
               description: Phase-3 edge proof (traefik/whoami)
+      - Media:
+          - Jellyfin:
+              icon: jellyfin.png
+              href: https://jellyfin.ragnaforge.xyz
+              description: Primary media server (QuickSync)
+          - Plex:
+              icon: plex.png
+              href: https://plex.ragnaforge.xyz
+              description: Second media server (P2, RAM-gated)
+          - Seerr:
+              icon: overseerr.png
+              href: https://seerr.ragnaforge.xyz
+              description: Request front door (backend = Jellyfin)
+          - Maintainerr:
+              icon: maintainerr.png
+              href: https://maintainerr.ragnaforge.xyz
+              description: Manual six-surface cascade delete
+          - Jellystat:
+              icon: jellyfin.png
+              href: https://jellystat.ragnaforge.xyz
+              description: Jellyfin watch statistics (P2)
+      - Acquisition:
+          - qBittorrent:
+              icon: qbittorrent.png
+              href: https://qbittorrent.ragnaforge.xyz
+              description: Download client (behind Proton/Gluetun)
+          - Prowlarr:
+              icon: prowlarr.png
+              href: https://prowlarr.ragnaforge.xyz
+              description: Indexer manager (native app-sync)
+          - Radarr:
+              icon: radarr.png
+              href: https://radarr.ragnaforge.xyz
+              description: Movie PVR
+          - Sonarr:
+              icon: sonarr.png
+              href: https://sonarr.ragnaforge.xyz
+              description: TV PVR
+          - Bazarr:
+              icon: bazarr.png
+              href: https://bazarr.ragnaforge.xyz
+              description: Subtitles
+          - Byparr:
+              icon: flaresolverr.png
+              href: https://byparr.ragnaforge.xyz
+              description: Bot-protection proxy (Mac, stateless)
+          - Cleanuparr:
+              icon: cleanuparr.png
+              href: https://cleanuparr.ragnaforge.xyz
+              description: Queue cleanup (Mac, stateless)
+          - Huntarr:
+              icon: huntarr.png
+              href: https://huntarr.ragnaforge.xyz
+              description: Missing/upgrade hunter (Mac, stateless)
   homepage-widgets:
     content: |
       - resources:

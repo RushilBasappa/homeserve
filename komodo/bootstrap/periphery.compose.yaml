@@ -38,6 +38,22 @@ services:
       CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN}
       # Phase 3 (edge): wg-easy admin bcrypt hash.
       WG_EASY_PASSWORD_HASH: ${WG_EASY_PASSWORD_HASH}
+      # --- Phase 5 (media): secrets the arr / jellystat / plex stacks reference as
+      # ${VAR}. Forwarded here so a Periphery-run compose resolves them (research R4).
+      # Proton WireGuard egress (gluetun) — reused Phase-1 commercial-VPN creds.
+      WIREGUARD_PRIVATE_KEY: ${WIREGUARD_PRIVATE_KEY}
+      WIREGUARD_ADDRESSES: ${WIREGUARD_ADDRESSES}
+      # Deterministic servarr API keys (the linchpin of declarative wiring).
+      RADARR_API_KEY: ${RADARR_API_KEY}
+      SONARR_API_KEY: ${SONARR_API_KEY}
+      PROWLARR_API_KEY: ${PROWLARR_API_KEY}
+      BAZARR_API_KEY: ${BAZARR_API_KEY}
+      # qBittorrent human-login password.
+      QBIT_WEBUI_PASSWORD: ${QBIT_WEBUI_PASSWORD}
+      # P2 (plex / jellystat) — forwarded now so Periphery isn't recreated again.
+      PLEX_CLAIM: ${PLEX_CLAIM}
+      JELLYSTAT_DB_PASSWORD: ${JELLYSTAT_DB_PASSWORD}
+      JELLYSTAT_JWT_SECRET: ${JELLYSTAT_JWT_SECRET}
     volumes:
       # Drive the node's Docker engine.
       - /var/run/docker.sock:/var/run/docker.sock

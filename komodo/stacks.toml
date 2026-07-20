@@ -104,3 +104,104 @@ git_provider = "github.com"
 branch = "main"
 file_paths = ["stacks/wg-easy/compose.yaml"]
 webhook_enabled = false
+
+# ============================================================================
+# Phase 5 — Media stack (ARR + Jellyfin/Plex) (research R7/R11; contract
+# stack-inventory). Every STATEFUL stack is pinned to ragnaforge-dell (library
+# disk + iGPU + golden rule); only the stateless `media-helpers` runs on the Mac.
+# All manual (webhook_enabled=false). Bring-up order in docs/runbooks/phase5-media.md:
+# arr → jellyfin → seerr → maintainerr (P1) → [RAM gate] → plex → jellystat →
+# media-helpers (P2).
+# ============================================================================
+
+[[stack]]
+name = "arr"
+description = "Phase-5 — acquisition backbone (gluetun/qbit + prowlarr/radarr/sonarr/bazarr + unpackerr/configarr)."
+tags = ["phase-5", "media"]
+
+[stack.config]
+server = "ragnaforge-dell"
+repo = "RushilBasappa/homeserve"
+git_provider = "github.com"
+branch = "main"
+file_paths = ["stacks/arr/compose.yaml"]
+webhook_enabled = false
+
+[[stack]]
+name = "jellyfin"
+description = "Phase-5 — primary media server (QuickSync HW transcode; MVP)."
+tags = ["phase-5", "media"]
+
+[stack.config]
+server = "ragnaforge-dell"
+repo = "RushilBasappa/homeserve"
+git_provider = "github.com"
+branch = "main"
+file_paths = ["stacks/jellyfin/compose.yaml"]
+webhook_enabled = false
+
+[[stack]]
+name = "seerr"
+description = "Phase-5 — the single request front door (backend = Jellyfin)."
+tags = ["phase-5", "media"]
+
+[stack.config]
+server = "ragnaforge-dell"
+repo = "RushilBasappa/homeserve"
+git_provider = "github.com"
+branch = "main"
+file_paths = ["stacks/seerr/compose.yaml"]
+webhook_enabled = false
+
+[[stack]]
+name = "maintainerr"
+description = "Phase-5 — single manual cascade-delete mechanism (six surfaces)."
+tags = ["phase-5", "media"]
+
+[stack.config]
+server = "ragnaforge-dell"
+repo = "RushilBasappa/homeserve"
+git_provider = "github.com"
+branch = "main"
+file_paths = ["stacks/maintainerr/compose.yaml"]
+webhook_enabled = false
+
+[[stack]]
+name = "plex"
+description = "Phase-5 — second media server (QuickSync; RAM-GATED, deploy only if T034 passes)."
+tags = ["phase-5", "media", "ram-gated"]
+
+[stack.config]
+server = "ragnaforge-dell"
+repo = "RushilBasappa/homeserve"
+git_provider = "github.com"
+branch = "main"
+file_paths = ["stacks/plex/compose.yaml"]
+webhook_enabled = false
+
+[[stack]]
+name = "jellystat"
+description = "Phase-5 — Jellyfin watch stats + its Postgres (P2)."
+tags = ["phase-5", "media"]
+
+[stack.config]
+server = "ragnaforge-dell"
+repo = "RushilBasappa/homeserve"
+git_provider = "github.com"
+branch = "main"
+file_paths = ["stacks/jellystat/compose.yaml"]
+webhook_enabled = false
+
+[[stack]]
+name = "media-helpers"
+description = "Phase-5 — STATELESS self-maintenance workers (byparr/cleanuparr/huntarr) on the Mac."
+tags = ["phase-5", "media", "stateless"]
+
+[stack.config]
+# The ONLY Phase-5 stack on the Mac — stateless helpers only (golden rule).
+server = "ragnaforge-mac"
+repo = "RushilBasappa/homeserve"
+git_provider = "github.com"
+branch = "main"
+file_paths = ["stacks/media-helpers/compose.yaml"]
+webhook_enabled = false

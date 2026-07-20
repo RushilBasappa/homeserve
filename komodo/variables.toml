@@ -29,3 +29,23 @@ value = "10.0.0.71"
 name = "VPN_HOSTNAME"
 description = "Public hostname of the secondary WireGuard VPN (wg-easy WG_HOST); tracked on the current public IP by Cloudflare DDNS, or pointed at the relay VPS on the NO-GO path."
 value = "vpn.ragnaforge.xyz"
+
+# --- Phase 5: Media stack — shared non-secret config every media stack reads
+# (contract stack-inventory; research R9). All media containers run as this UID/GID
+# so files created under /srv/nfs stay mutually readable/writable (Phase-4 setgid
+# tree). TZ drives correct schedules/logs across the arr apps and servers.
+
+[[variable]]
+name = "MEDIA_PUID"
+description = "UID every media container runs as (the rushil account, owner of the /srv/nfs tree). Keeps hardlink-friendly shared ownership across the pipeline."
+value = "1000"
+
+[[variable]]
+name = "MEDIA_PGID"
+description = "GID every media container runs as (matches the setgid /srv/nfs tree from Phase 4)."
+value = "1000"
+
+[[variable]]
+name = "MEDIA_TZ"
+description = "Timezone for all media containers (schedules, logs, Bazarr/Configarr timing). IANA name."
+value = "America/Los_Angeles"
