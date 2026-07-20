@@ -38,6 +38,15 @@ services:
       - adguard-work:/opt/adguardhome/work
     networks:
       - traefik
+    labels:
+      # --- Traefik: expose the admin UI at adguard.ragnaforge.xyz. LAN/Tailscale
+      # only — :443 is never router-forwarded (FR-016). DNS itself stays on the
+      # host :53 above; this just routes the web UI (container port 3000). ---
+      - "traefik.enable=true"
+      - "traefik.http.routers.adguard.rule=Host(`adguard.ragnaforge.xyz`)"
+      - "traefik.http.routers.adguard.entrypoints=websecure"
+      - "traefik.http.routers.adguard.tls=true"
+      - "traefik.http.services.adguard.loadbalancer.server.port=3000"
 
 volumes:
   # Local named volumes on the Dell (golden rule: state → the Dell).

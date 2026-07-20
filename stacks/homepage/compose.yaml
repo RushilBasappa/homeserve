@@ -28,15 +28,15 @@ configs:
       - Infrastructure:
           - Komodo:
               icon: komodo.png
-              href: http://10.0.0.70:9120
+              href: https://komodo.ragnaforge.xyz
               description: Fleet orchestration (Core) — LAN/Tailscale only
           - AdGuard Home:
               icon: adguard-home.png
-              href: http://10.0.0.70:3000
+              href: https://adguard.ragnaforge.xyz
               description: Internal DNS + ad-blocking — LAN/Tailscale only
           - wg-easy:
               icon: wireguard.png
-              href: http://10.0.0.70:51821
+              href: https://vpn.ragnaforge.xyz
               description: Family/friends VPN admin — LAN/Tailscale only
       - Apps:
           - whoami:

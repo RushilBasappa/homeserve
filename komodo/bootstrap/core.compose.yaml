@@ -33,10 +33,26 @@ services:
 
   core:
     image: ghcr.io/moghtech/komodo-core:2
-    labels: [komodo.skip]
     restart: unless-stopped
     depends_on:
       - mongo
+    networks:
+      # `default` keeps Core↔Mongo on the internal network; `traefik` lets the
+      # edge proxy reach Core at komodo.ragnaforge.xyz (LAN/Tailscale only).
+      - default
+      - traefik
+    labels:
+      - komodo.skip   # never let Komodo self-manage the bootstrap control plane
+      # --- Traefik: serve Core over HTTPS at komodo.ragnaforge.xyz (also fixes the
+      # API-key "copy needs a secure context" issue). :9120 stays published for
+      # direct LAN/Tailscale access + the out-of-band bootstrap flow. ---
+      - "traefik.enable=true"
+      - "traefik.http.routers.komodo.rule=Host(`komodo.ragnaforge.xyz`)"
+      - "traefik.http.routers.komodo.entrypoints=websecure"
+      - "traefik.http.routers.komodo.tls=true"
+      - "traefik.http.services.komodo.loadbalancer.server.port=9120"
+      # Core is multi-homed (default + traefik) — tell Traefik which network to use.
+      - "traefik.docker.network=traefik"
     ports:
       # Published for LAN + Tailscale reach. NOT router-forwarded → not public.
       - "9120:9120"
@@ -58,3 +74,11 @@ volumes:
     name: komodo-mongo-data
   komodo-mongo-config:
     name: komodo-mongo-config
+
+networks:
+  # Core↔Mongo internal network (Compose's project default).
+  default: {}
+  # Shared edge proxy network — must already exist (`make edge-network`) BEFORE
+  # `make komodo-core`, since Core now attaches to it.
+  traefik:
+    external: true
