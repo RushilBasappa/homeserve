@@ -1,0 +1,235 @@
+---
+# stacks/maintainerr/configure/setup.yml — PLANE 3 (application setup), co-located with
+# the maintainerr stack, run POST-DEPLOY, idempotently (spec FR-023/SC-011). Wires
+# Maintainerr 3.x → Radarr, Sonarr, and Seerr (contract wiring edges 13, 15).
+#
+# MEDIA SERVER = PLEX (already configured in Maintainerr — its collections ARE Plex
+# collections; it does not use Jellyfin). This play ASSERTS Plex is set up and does not
+# touch it (that step needs an interactive plex.tv sign-in). Edge 14 in the contract
+# said "Jellyfin" — corrected here: Maintainerr is Plex-native and the operator is
+# Plex-primary.
+#
+# NETWORK: Maintainerr, Radarr, Sonarr, and Seerr all share the external `traefik`
+# docker network, so Maintainerr reaches them container-to-container by name:
+# http://radarr:7878, http://sonarr:8989, http://seerr:5055 (no trailing slash — the
+# Maintainerr serviceUrl schema rejects it). Maintainerr's settings API is
+# UNAUTHENTICATED on the LAN, so no Maintainerr key is needed.
+#
+# CREDS (.mise.toml): RADARR_API_KEY, SONARR_API_KEY (deterministic servarr keys) and
+# PLEX_TOKEN. Seerr's own API key is NOT a stored secret (Seerr mints it at init), so
+# this play mints a session via the Plex token and reads it at runtime — same trick as
+# stacks/seerr/configure/setup.yml. (edge 16, Maintainerr → qBittorrent download client,
+# is intentionally deferred — optional; Radarr/Sonarr already own torrent removal.)
+#
+# RUN:  cd stacks/maintainerr/configure && mise exec -- ansible-playbook setup.yml
+# Re-runs are no-ops (GET-then-POST; only adds when an instance/link is missing).
+
+- name: Maintainerr connections — Radarr / Sonarr / Seerr (plane 3)
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    mm_url: "https://maintainerr.ragnaforge.xyz"
+    seerr_url: "https://seerr.ragnaforge.xyz"
+    plex_token: "{{ lookup('env', 'PLEX_TOKEN') }}"
+    radarr_api_key: "{{ lookup('env', 'RADARR_API_KEY') }}"
+    sonarr_api_key: "{{ lookup('env', 'SONARR_API_KEY') }}"
+    # Container-to-container URLs (shared `traefik` network; no trailing slash).
+    radarr_internal: "http://radarr:7878"
+    sonarr_internal: "http://sonarr:8989"
+    seerr_internal: "http://seerr:5055"
+
+  tasks:
+    - name: Require secrets
+      ansible.builtin.assert:
+        that:
+          - radarr_api_key | length > 0
+          - sonarr_api_key | length > 0
+          - plex_token | length > 0
+        fail_msg: "Set RADARR_API_KEY, SONARR_API_KEY and PLEX_TOKEN in .mise.toml."
+
+    - name: Read Maintainerr settings (reachable? media server?)
+      ansible.builtin.uri:
+        url: "{{ mm_url }}/api/settings"
+        method: GET
+        status_code: 200
+        return_content: true
+      register: mm_settings
+
+    - name: Assert Plex is the configured media server (set up interactively first)
+      ansible.builtin.assert:
+        that:
+          - mm_settings.json.media_server_type == 'plex'
+          - (mm_settings.json.plex_machine_id | default('', true)) | length > 0
+        fail_msg: >-
+          Maintainerr's Plex media server isn't configured yet. Configure it in the
+          Maintainerr UI (needs a plex.tv sign-in) before running this play.
+
+    # ---------------------------- Radarr (edge 13) ---------------------------------
+    - name: List Maintainerr's Radarr instances
+      ansible.builtin.uri:
+        url: "{{ mm_url }}/api/settings/radarr"
+        method: GET
+        status_code: 200
+        return_content: true
+      register: mm_radarr
+
+    - name: Test the Radarr connection (fail loudly on rejection)
+      ansible.builtin.uri:
+        url: "{{ mm_url }}/api/settings/test/radarr"
+        method: POST
+        body_format: json
+        body:
+          serverName: Radarr
+          url: "{{ radarr_internal }}"
+          apiKey: "{{ radarr_api_key }}"
+        status_code: [200, 201]
+        return_content: true
+      register: mm_radarr_test
+      when: (mm_radarr.json | length) == 0
+
+    - name: Fail if Maintainerr cannot reach Radarr
+      ansible.builtin.assert:
+        that: mm_radarr_test.json.status == 'OK'
+        fail_msg: "Maintainerr → Radarr test failed at {{ radarr_internal }}: {{ mm_radarr_test.json.message | default('?') }}"
+      when: (mm_radarr.json | length) == 0
+
+    - name: Add Radarr to Maintainerr (only when none configured)
+      ansible.builtin.uri:
+        url: "{{ mm_url }}/api/settings/radarr"
+        method: POST
+        body_format: json
+        body:
+          serverName: Radarr
+          url: "{{ radarr_internal }}"
+          apiKey: "{{ radarr_api_key }}"
+        status_code: [200, 201]
+      when: (mm_radarr.json | length) == 0
+
+    # ---------------------------- Sonarr (edge 13) ---------------------------------
+    - name: List Maintainerr's Sonarr instances
+      ansible.builtin.uri:
+        url: "{{ mm_url }}/api/settings/sonarr"
+        method: GET
+        status_code: 200
+        return_content: true
+      register: mm_sonarr
+
+    - name: Test the Sonarr connection (fail loudly on rejection)
+      ansible.builtin.uri:
+        url: "{{ mm_url }}/api/settings/test/sonarr"
+        method: POST
+        body_format: json
+        body:
+          serverName: Sonarr
+          url: "{{ sonarr_internal }}"
+          apiKey: "{{ sonarr_api_key }}"
+        status_code: [200, 201]
+        return_content: true
+      register: mm_sonarr_test
+      when: (mm_sonarr.json | length) == 0
+
+    - name: Fail if Maintainerr cannot reach Sonarr
+      ansible.builtin.assert:
+        that: mm_sonarr_test.json.status == 'OK'
+        fail_msg: "Maintainerr → Sonarr test failed at {{ sonarr_internal }}: {{ mm_sonarr_test.json.message | default('?') }}"
+      when: (mm_sonarr.json | length) == 0
+
+    - name: Add Sonarr to Maintainerr (only when none configured)
+      ansible.builtin.uri:
+        url: "{{ mm_url }}/api/settings/sonarr"
+        method: POST
+        body_format: json
+        body:
+          serverName: Sonarr
+          url: "{{ sonarr_internal }}"
+          apiKey: "{{ sonarr_api_key }}"
+        status_code: [200, 201]
+      when: (mm_sonarr.json | length) == 0
+
+    # ---------------------------- Seerr (edge 15) ----------------------------------
+    - name: Read Maintainerr's Seerr link
+      ansible.builtin.uri:
+        url: "{{ mm_url }}/api/settings/seerr"
+        method: GET
+        status_code: 200
+        return_content: true
+      register: mm_seerr
+
+    - name: Link Seerr (mint its API key via Plex, then attach) — when not linked
+      when: (mm_seerr.json.url | default('', true)) | length == 0
+      block:
+        - name: Sign in to Seerr via Plex (session only)
+          ansible.builtin.uri:
+            url: "{{ seerr_url }}/api/v1/auth/plex"
+            method: POST
+            body_format: json
+            body:
+              authToken: "{{ plex_token }}"
+            status_code: 200
+          register: seerr_auth
+          no_log: true
+
+        - name: Read Seerr's API key from its main settings
+          ansible.builtin.uri:
+            url: "{{ seerr_url }}/api/v1/settings/main"
+            method: GET
+            headers:
+              Cookie: "{{ seerr_auth.cookies_string }}"
+            status_code: 200
+            return_content: true
+          register: seerr_main
+          no_log: true
+
+        - name: Fail if Seerr has no API key yet
+          ansible.builtin.assert:
+            that: (seerr_main.json.apiKey | default('', true)) | length > 0
+            fail_msg: "Seerr returned no API key — is Seerr initialized (run stacks/seerr/configure/setup.yml)?"
+
+        - name: Test the Seerr connection from Maintainerr (fail loudly)
+          ansible.builtin.uri:
+            url: "{{ mm_url }}/api/settings/test/seerr"
+            method: POST
+            body_format: json
+            body:
+              url: "{{ seerr_internal }}"
+              api_key: "{{ seerr_main.json.apiKey }}"
+            status_code: [200, 201]
+            return_content: true
+          register: mm_seerr_test
+          no_log: true
+
+        - name: Fail if Maintainerr cannot reach Seerr
+          ansible.builtin.assert:
+            that: mm_seerr_test.json.status == 'OK'
+            fail_msg: "Maintainerr → Seerr test failed at {{ seerr_internal }}: {{ mm_seerr_test.json.message | default('?') }}"
+
+        - name: Attach Seerr to Maintainerr
+          ansible.builtin.uri:
+            url: "{{ mm_url }}/api/settings/seerr"
+            method: POST
+            body_format: json
+            body:
+              url: "{{ seerr_internal }}"
+              api_key: "{{ seerr_main.json.apiKey }}"
+            status_code: [200, 201]
+          no_log: true
+
+    - name: Re-read Maintainerr connection state
+      ansible.builtin.uri:
+        url: "{{ mm_url }}/api/settings/{{ item }}"
+        method: GET
+        status_code: [200, 201]
+        return_content: true
+      loop: [radarr, sonarr, seerr]
+      register: mm_final
+
+    - name: Summary
+      ansible.builtin.debug:
+        msg: >-
+          Maintainerr wired (media server = Plex '{{ mm_settings.json.plex_name }}'):
+          Radarr instances = {{ mm_final.results[0].json | length }},
+          Sonarr instances = {{ mm_final.results[1].json | length }},
+          Seerr linked = {{ (mm_final.results[2].json.url | default('', true)) | length > 0 }}.
+          Re-runs are no-ops.
