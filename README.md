@@ -15,21 +15,29 @@ plan and [`docs/CONVENTIONS.md`](./docs/CONVENTIONS.md) for how stacks are built
 
 ## Current status
 
-**Phase 2 — Orchestration (Komodo) — ✅ complete.**
+**Phase 3 — Edge, DNS & TLS — ✅ complete.**
 
-The two Debian hosts are a **centrally managed fleet**. Komodo Core runs on the
-Dell (its state in a Mongo volume on the Dell), with a Periphery agent on both
-nodes; the fleet's servers and stacks are declared in git under
-[`komodo/`](./komodo/) and reconciled by Komodo ResourceSync. A stack deploys to
-a chosen node **from Core alone** — no SSH, no manual `docker compose` on the
-node. Secrets come from the gitignored `.mise.toml` (kept in sync across nodes
-with `make sync-secrets`); the tracked tree stays secret-free. Proven live with a
-trivial `whoami` test stack across all eight validation scenarios (deploy,
-git-driven change, secret injection, node independence, reboot persistence). Real
-application services arrive from Phase 3 onward.
+Every deployed app now has a friendly, **browser-trusted** `https://<name>.ragnaforge.xyz`
+URL, resolved network-wide by an ad-blocking internal DNS, with a private way in
+for family/friends. All as Komodo-managed stacks on the Dell:
 
-Earlier phases: **Phase 0** (foundation & repo scaffolding) and **Phase 1** (host
-provisioning via Ansible + Tailscale) — ✅ complete.
+- **Traefik v3** terminates HTTPS and Host-routes by Docker label; one **Let's
+  Encrypt wildcard** `*.ragnaforge.xyz` via Cloudflare DNS-01, persisted and
+  auto-renewing. Verified live from a Mac browser; a new route publishes by labels
+  alone (no proxy edit, no new cert).
+- **AdGuard Home** answers `*.ragnaforge.xyz → 10.0.0.70` for every client and
+  blocks ad/tracker domains.
+- **Homepage** dashboard at `home.ragnaforge.xyz`; **Cloudflare DDNS** tracks the
+  home IP.
+- **wg-easy** VPN for family/friends over the **one** public port (`51820/udp`),
+  proven end-to-end from an off-network phone; Tailscale carries operators over the
+  same subnet route. A public scan shows only UDP 51820.
+
+Preflight verdict: real public IP (not CGNAT) → direct port-forward path.
+Full walk-through in [`docs/runbooks/phase3-edge.md`](./docs/runbooks/phase3-edge.md).
+
+Earlier phases: **Phase 0** (scaffolding), **Phase 1** (Ansible + Tailscale
+provisioning), **Phase 2** (Komodo orchestration) — ✅ complete.
 
 ## Repository layout
 
@@ -109,11 +117,11 @@ workflow are in
 [`docs/runbooks/phase2-komodo.md`](./docs/runbooks/phase2-komodo.md); forward-looking
 ideas in [`docs/improvements.md`](./docs/improvements.md).
 
-### Phase 3 — Edge, DNS & TLS 🟡 authored — pending bring-up
+### Phase 3 — Edge, DNS & TLS ✅
 
-**Fully declared in git; awaiting operator bring-up on the Dell.** Every edge
-capability is a Komodo-managed stack pinned to `ragnaforge-dell`, deployed from
-Core — no ad-hoc node config. Delivered as code:
+**Live and verified on the Dell** (2026-07-19). Every edge capability is a
+Komodo-managed stack pinned to `ragnaforge-dell`, deployed from Core — no ad-hoc
+node config. Delivered and running:
 
 - **Traefik v3** ([`stacks/traefik/`](./stacks/traefik/)) — the reverse proxy.
   Discovers apps by Docker labels on the shared external `traefik` network,
@@ -138,12 +146,13 @@ Core — no ad-hoc node config. Delivered as code:
   ([`relay/README.md`](./relay/README.md)).
 
 Both VPN paths converge: resolver → `10.0.0.70` → subnet route → Traefik →
-wildcard cert. Bring-up order, the preflight verdict, and family/friend onboarding
-(incl. Fire TV file import) are in
-[`docs/runbooks/phase3-edge.md`](./docs/runbooks/phase3-edge.md). The behavioral
-validation (cert issuance, HTTPS-by-name, DNS, both VPN paths, one-port public
-scan) runs against the live Dell per that runbook — this section moves to ✅ once
-those scenarios pass.
+wildcard cert. **Validated live:** the wildcard cert issued and is browser-trusted
+(confirmed from a Mac); publish-by-labels adds a route in seconds with no proxy
+edit or new cert; AdGuard resolves names network-wide with ad-blocking; DDNS tracks
+the public IP; an off-network phone reached apps over the WireGuard VPN; and a
+public scan shows only UDP 51820. Bring-up order, the preflight verdict, and
+family/friend onboarding (incl. Fire TV file import) are in
+[`docs/runbooks/phase3-edge.md`](./docs/runbooks/phase3-edge.md).
 
 ### Phase 4 — Storage
 

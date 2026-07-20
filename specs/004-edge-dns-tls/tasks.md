@@ -120,8 +120,8 @@ without touching Traefik config or issuing a cert; stopping the stack drops the 
 (SC-002/003; contract `edge-routing-contract.md`)
 
 - [X] T015 [US2] Codify the label contract as the reusable pattern: confirm `docs/CONVENTIONS.md` "Traefik routing labels" matches the deployed reality; adjust if drifted (contract `edge-routing-contract.md`)
-- [ ] T016 [US2] ⏳ **operator** — Prove publish-by-labels: add a second router (e.g. a `whoami2` host rule or a temporary second labelled service), deploy, and confirm it is served under the **existing** wildcard with **no** Traefik config edit and **no** new issuance (SC-003)
-- [ ] T017 [US2] ⏳ **operator** — Prove teardown: stop the labelled stack and confirm its route stops responding within seconds (no stale route); revert the temporary second route (FR-002)
+- [X] T016 [US2] ✅ **verified 2026-07-19** — a 2nd labelled route (`whoami2`) went live in seconds under the existing wildcard with **no** Traefik config edit and **no** new issuance (acme.json 16052→16052, cert trusted). Original — Prove publish-by-labels: add a second router (e.g. a `whoami2` host rule or a temporary second labelled service), deploy, and confirm it is served under the **existing** wildcard with **no** Traefik config edit and **no** new issuance (SC-003)
+- [X] T017 [US2] ✅ **verified 2026-07-19** — stopping the labelled container dropped its route to 404 within seconds (no stale route); temporary route reverted. Original — Prove teardown: stop the labelled stack and confirm its route stops responding within seconds (no stale route); revert the temporary second route (FR-002)
 
 **Checkpoint**: the label-only publish workflow every later phase reuses is proven.
 
@@ -154,7 +154,7 @@ a working link to at least one deployed app. (SC-001; data-model §6)
 
 - [X] T022 [P] [US5] Create `stacks/homepage/compose.yaml` (gethomepage/homepage) with the canonical Traefik labels for `home.ragnaforge.xyz`, `homepage-config` volume on the Dell (research R5; contract `edge-routing-contract.md`)
 - [X] T023 [P] [US5] Add `stacks/homepage/config/*.yaml` (settings + services/bookmarks) listing `whoami` and placeholders for later apps; optional Docker-label service discovery (research R5)
-- [ ] T024 [US5] ⏳ **operator** — Declaration DONE in `komodo/stacks.toml`; remaining: deploy from Core; verify `https://home.ragnaforge.xyz` loads over trusted HTTPS with a working app link (quickstart Scenario 4; SC-001)
+- [X] T024 [US5] ✅ **verified 2026-07-19** — homepage deployed from Core (config shipped inline via `configs:`); `https://home.ragnaforge.xyz` loads over the trusted cert (HTTP 200) listing whoami + infra links. Original — Declare the homepage stack; deploy from Core; verify `https://home.ragnaforge.xyz` loads over trusted HTTPS with a working app link (quickstart Scenario 4; SC-001)
 
 **Checkpoint**: the front door is live.
 
