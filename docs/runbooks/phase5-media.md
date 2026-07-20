@@ -186,10 +186,21 @@ of `tasks.md` against reality; the SC scenario table below is still to be filled
 running the behavioural drills.
 
 - **Deployed & healthy on the Dell:** `gluetun`, `qbittorrent`, `prowlarr`, `radarr`,
-  `sonarr`, `bazarr`, `unpackerr`, `jellyfin`, `seerr`, `plex` (+ edge/infra:
-  `traefik`, `adguard`, `homepage`, `wg-easy`, `cloudflare-ddns`, Komodo).
-- **NOT deployed:** `maintainerr`, `jellystat` (Dell), and `media-helpers`
-  (`byparr`/`cleanuparr`/`huntarr`, Mac — Mac runs only the Periphery agent).
+  `sonarr`, `bazarr`, `unpackerr`, `jellyfin`, `seerr`, `plex`, **`maintainerr`**
+  (deployed 2026-07-20; HTTPS 200 via Traefik) (+ edge/infra: `traefik`, `adguard`,
+  `homepage`, `wg-easy`, `cloudflare-ddns`, Komodo).
+- **Deployed & healthy on the Mac:** **`byparr`** + **`cleanuparr`** (deployed
+  2026-07-20). Serve on their LAN ports (`byparr` :8191 → 301, `cleanuparr` :11011 →
+  200); Prowlarr reaches byparr **directly at `http://10.0.0.71:8191`** (the designed
+  path). **Note:** their `*.ragnaforge.xyz` UI routes still 404 through Traefik — the
+  file-provider routes aren't in the running Traefik (created before they were added);
+  loading them needs a **Traefik recreate** (inline `configs:` → DestroyStack+DeployStack).
+- **DESCOPED / removed 2026-07-20:** `jellystat` (unused — Plex stats → Tautulli,
+  PLAN Phase 6) and `huntarr` (pinned image no longer pullable; optional hunter).
+- **Wiring still pending (UI/API, post-deploy):** Maintainerr → Radarr/Sonarr/Jellyfin/
+  Seerr/qBittorrent + the manual "remove" collection (edges 13–16); Byparr as a Prowlarr
+  indexer proxy + tag on bot-protected indexers (edge 5); Cleanuparr → PVRs/qBittorrent
+  (edge 17).
 - **Acquisition wiring (live):** Prowlarr has **5 indexers** (LimeTorrents, RuTor,
   The Pirate Bay, TorrentDownload, YTS) and **native app-sync** to **2 applications**
   (Radarr, Sonarr); Radarr's download client = **qBittorrent** (via Gluetun). → T011 ✓

@@ -106,8 +106,8 @@ through Traefik). See `docs/runbooks/phase5-media.md` → "Live-state audit".
 > Depends on US1 (needs media in the library and the Jellyfin/Seerr connections to cascade into).
 
 - [X] T022 [P] [US2] Create `stacks/maintainerr/compose.yaml` (Dell) — `maintainerr-config` volume, Traefik labels; declare it in `komodo/stacks.toml` (Dell)
-- [ ] T023 [US2] Deploy `maintainerr`; connect Maintainerr → Radarr, Sonarr, Jellyfin, Seerr, qBittorrent (`contracts/wiring.md` edges 13–16); create the manual **"remove"** collection; ensure **no** age/watch/disk rules exist (FR-008)
-- [ ] T024 [US2] Add a Homepage entry and verify valid TLS for `maintainerr`
+- [ ] T023 [US2] Deploy `maintainerr`; connect Maintainerr → Radarr, Sonarr, Jellyfin, Seerr, qBittorrent (`contracts/wiring.md` edges 13–16); create the manual **"remove"** collection; ensure **no** age/watch/disk rules exist (FR-008) — *DEPLOY done 2026-07-20 (up on Dell, HTTPS 200); connections + "remove" collection = pending UI wiring*
+- [X] T024 [US2] Add a Homepage entry and verify valid TLS for `maintainerr` — *live: Homepage entry present + maintainerr answers HTTPS 200 via Traefik (2026-07-20)*
 - [ ] T025 [US2] Run `quickstart.md` Scenario 4 — seed a title present on **all six** surfaces, add it to "remove", and verify per `contracts/deletion-cascade.md` that disk/qBittorrent/arr/Jellyfin/Plex(after scan)/Seerr are all cleared with **zero** orphans; re-run the add → no error/no change (SC-003, SC-005, FR-006/007/009/010)
 - [ ] T026 [US2] Run `quickstart.md` Scenario 5 — confirm nothing is deleted without an explicit add over an observation window (SC-004, FR-008)
 
@@ -126,10 +126,10 @@ through Traefik). See `docs/runbooks/phase5-media.md` → "Live-state audit".
 - [X] T027 [P] [US3] Author `stacks/arr/configarr/config.yml` — TRaSH quality profiles + custom formats for Radarr and Sonarr (`contracts/wiring.md` edge 7)
 - [ ] T028 [US3] Enable/run Configarr against Radarr/Sonarr; run `quickstart.md` Scenario 9 (profiles match; second run idempotent); record (SC-009, FR-011)
 - [X] T029 [P] [US3] Create `stacks/media-helpers/compose.yaml` (**Mac**) — `byparr`, `cleanuparr`, `huntarr`, run **stateless** (config via env / git RO so the Mac holds no persistent state, per golden rule — see `stack-inventory.md` note), Traefik labels; declare it in `komodo/stacks.toml` (`server = "ragnaforge-mac"`)
-- [ ] T030 [US3] Deploy `media-helpers`; add Byparr as an indexer proxy in Prowlarr (edge 5); connect Cleanuparr → Radarr/Sonarr/qBittorrent and Huntarr → Radarr/Sonarr (edges 17–18), pointing at the Dell (`10.0.0.70`)
-- [ ] T031 [US3] Add Homepage entries and verify valid TLS for `byparr`, `cleanuparr`, `huntarr`
+- [ ] T030 [US3] Deploy `media-helpers`; add Byparr as an indexer proxy in Prowlarr (edge 5); connect Cleanuparr → Radarr/Sonarr/qBittorrent (edge 17), pointing at the Dell (`10.0.0.70`) — *DEPLOY done 2026-07-20 (byparr+cleanuparr up on Mac; byparr reachable at 10.0.0.71:8191; **huntarr dropped**); byparr-proxy + cleanuparr wiring = pending UI/API*
+- [ ] T031 [US3] Add Homepage entries and verify valid TLS for `byparr`, `cleanuparr` — *Homepage entries present; **Traefik file-routes 404 until a Traefik recreate loads them** (inline configs)*
 - [ ] T032 [US3] Run `quickstart.md` Scenario 7 (introduce a stalled/blocked download; confirm Cleanuparr removes + blocklists + re-searches with no operator action); record (SC-007, FR-012)
-- [ ] T033 [US3] Confirm Huntarr triggers a search for a missing monitored item, and Byparr returns results from a bot-protected indexer (US3 acceptance 3–4, FR-013/014)
+- [ ] T033 [US3] Confirm Byparr returns results from a bot-protected indexer (FR-014) — *Huntarr clause DROPPED with the stack; byparr-only verification remains*
 
 **Checkpoint**: the library keeps itself clean, complete, and correctly-graded without babysitting.
 
