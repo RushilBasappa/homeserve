@@ -49,6 +49,8 @@
     radarr_internal: "http://radarr:7878"
     sonarr_internal: "http://sonarr:8989"
     prowlarr_internal: "http://prowlarr:9696"
+    # Plex owner token (read off the claimed server) — for the import→scan trigger.
+    plex_token: "{{ lookup('env', 'PLEX_TOKEN') }}"
 
     seerr_enabled: false
     # Bazarr (subtitles) has no env-settable API key and needs its own first-run
@@ -188,6 +190,56 @@
       loop: "{{ root_folders.results }}"
       loop_control:
         label: "{{ item.item.name }} -> {{ item.item.path }}"
+
+    # ========================================================================
+    # Radarr/Sonarr → Plex: update the Plex library on import. NFS mounts don't
+    # deliver the filesystem-change events Plex's auto-scan relies on, so a new
+    # import won't appear until Plex is told to scan. This notification makes the
+    # PVR trigger a targeted Plex scan the moment it imports. (Idempotent.)
+    # ========================================================================
+    - name: Read existing notifications (Radarr / Sonarr)
+      ansible.builtin.uri:
+        url: "{{ item.url }}/api/v3/notification"
+        method: GET
+        headers:
+          X-Api-Key: "{{ item.key }}"
+        status_code: 200
+        return_content: true
+      register: pvr_notifications
+      loop:
+        - { name: radarr, url: "{{ radarr_url }}", key: "{{ radarr_api_key }}" }
+        - { name: sonarr, url: "{{ sonarr_url }}", key: "{{ sonarr_api_key }}" }
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Add the Plex library-update notification where missing (idempotent)
+      ansible.builtin.uri:
+        url: "{{ item.item.url }}/api/v3/notification"
+        method: POST
+        headers:
+          X-Api-Key: "{{ item.item.key }}"
+        body_format: json
+        body:
+          name: Plex
+          implementation: PlexServer
+          configContract: PlexServerSettings
+          onDownload: true
+          onUpgrade: true
+          onRename: true
+          onGrab: false
+          onHealthIssue: false
+          fields:
+            - { name: host, value: plex }
+            - { name: port, value: 32400 }
+            - { name: useSsl, value: false }
+            - { name: authToken, value: "{{ plex_token }}" }
+            - { name: updateLibrary, value: true }
+        status_code: [201, 200]
+      when: "'Plex' not in (item.json | map(attribute='name') | list)"
+      loop: "{{ pvr_notifications.results }}"
+      loop_control:
+        label: "{{ item.item.name }}"
+      no_log: true
 
     # ========================================================================
     # Edge 11/12 — Bazarr → Radarr / Sonarr (subtitle source)
