@@ -291,6 +291,42 @@ node, so moving in reuses the same "add a node" workflow from §3.
   demoted to spares, macOS free for Adobe/desktop use. **Depends on:** a stable
   Phases 1–12 build to migrate from.
 
+### Phase 14 — Media-stack behavioral verification (deferred drills)
+**Objective:** close out the Phase 5 proof burden — run the SC-001…011
+behavioral drills against the live fleet and record the evidence. Phase 5 is
+**code-complete and deployed**; this phase is the deliberate, hands-on
+validation that was parked to pick up later. Independent of Phase 13 — do it
+whenever there's an evening to babysit a download and a delete.
+
+**Already confirmed (2026-07-20):** request → download (via Proton) → library →
+**play on Plex (TV)** works end-to-end — the core SC-001 path is green. The
+drills below are the remaining, mostly-adversarial proofs.
+
+- **US1 residue** (`quickstart.md` Sc. 1–3, 6): record the request→play evidence
+  (SC-001); **VPN killswitch / no-leak** — stop `gluetun`, confirm qBit egresses
+  nothing over the home line and only ever showed the Proton IP, auto-resume on
+  restart (SC-002, critical); **port-forward sync** after a `gluetun` restart
+  (SC-002a); **hardlink** import — same inode as `downloads/complete` (SC-006).
+- **US2 — the cascade** (Sc. 4–5): create Maintainerr's manual **"remove"**
+  collection (policy choice); seed a title on all six surfaces and verify the
+  single-action delete clears disk/qBit/*arr/Jellyfin/Plex/Seerr with **zero
+  orphans**, idempotent re-add (SC-003/005); confirm **nothing auto-deletes**
+  without an explicit add (SC-004).
+- **US3 — quality from code** (Sc. 9): trigger the `configarr` run-once stack via
+  Komodo, confirm TRaSH **custom formats actually land** in Radarr/Sonarr (live =
+  0 today — the real gap) and a second run is idempotent (SC-009).
+- **US4 — dual-server** (Sc. 8): same title plays from **Jellyfin and Plex** on
+  one on-disk copy (Plex side already proven).
+- **Polish** (Sc. 10–11): every UI reachable with valid TLS + on Homepage
+  (SC-010); clean re-run of `stacks/arr/configure/wire.yml` is idempotent with no
+  manual clicks, Buildarr unused (SC-011).
+- **Sign-off:** fill the SC-001…011 table in `specs/006-media-stack/quickstart.md`
+  + `docs/runbooks/phase5-media.md`, then mark Phase 5 done in `PLAN.md` /
+  `README.md`.
+
+- **Deliverable:** the SC-001…011 evidence table filled from live runs; Phase 5
+  formally signed off. **Depends on:** Phase 5 (deployed).
+
 ---
 
 ## 5. Tool summary (best-in-class per stage)

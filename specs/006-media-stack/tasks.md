@@ -34,12 +34,17 @@ through Traefik). See `docs/runbooks/phase5-media.md` → "Live-state audit".
 - **NOT yet deployed** (these stacks' `compose.yaml` exist but no container is running):
   `maintainerr` (US2 → T023–T026), `media-helpers` byparr/cleanuparr/huntarr on the Mac
   (US3 → T030–T033), `jellystat` (US4 stats → T038–T040).
-- **Behavioural verification still unrun/unrecorded** — the SC-001..011 evidence table
-  in the runbook is empty: request→play (T018), killswitch/no-leak (T019), port-sync
-  (T020), hardlink (T021), Configarr Scenario 9 / TRaSH CF match (T028 — profile present
-  but custom formats = 0, so partial), reachability SC-010 (T041 — not 100% until the
-  three stacks above deploy), wiring-reproducible SC-011 (T042), and the capstone
-  consolidation/sign-off (T045).
+- **Behavioural verification DEFERRED to PLAN.md → Phase 14** (operator's call,
+  2026-07-20). Phase 5 is **code-complete and deployed**; the hands-on SC-001..011
+  drills are parked as a dedicated late phase to run when there's time to babysit a
+  download + delete. Deferred tasks: request→play (T018 — **core path already
+  confirmed working: request→download→Plex playback on TV, 2026-07-20**),
+  killswitch/no-leak (T019), port-sync (T020), hardlink (T021), the manual "remove"
+  collection + delete drills (T023 remainder, T025, T026), Configarr CF match (T028 —
+  profile present but custom formats = 0, so partial), dual-server play (T040),
+  reachability SC-010 (T041), wiring-reproducible SC-011 (T042), and the capstone
+  consolidation/sign-off (T045). Left `[ ]` here as the source-of-truth checklist; see
+  Phase 14 for the framing.
 - Phasing enforces the RAM gate: **T034 passed (Plex is live alongside Jellyfin)**;
   P2 remainder (maintainerr, helpers, jellystat) + behavioural drills are what's left.
 
