@@ -87,14 +87,6 @@ configs:
               icon: bazarr.png
               href: https://bazarr.ragnaforge.xyz
               description: Subtitles
-          - Byparr:
-              icon: flaresolverr.png
-              href: https://byparr.ragnaforge.xyz
-              description: Bot-protection proxy (Mac, stateless)
-          - Cleanuparr:
-              icon: cleanuparr.png
-              href: https://cleanuparr.ragnaforge.xyz
-              description: Queue cleanup (Mac, stateless)
   homepage-widgets:
     content: |
       - resources:

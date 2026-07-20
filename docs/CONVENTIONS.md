@@ -57,9 +57,6 @@ and the Homepage entry. One name, everywhere.
 | 51820 | UDP | wg-easy | **the one** public port — router-forwarded → Dell |
 | 51821 | TCP | wg-easy | LAN/Tailscale admin — never router-forwarded |
 | 6881 | TCP/UDP | arr (via gluetun) | **outbound only via Proton**; inbound = Proton's forwarded port. **Not** router-forwarded — no home-IP exposure |
-| 8191 | TCP | media-helpers (Mac) | LAN only — Byparr; Prowlarr + Traefik file-route reach it at `10.0.0.71:8191` |
-| 11011 | TCP | media-helpers (Mac) | LAN only — Cleanuparr UI; Traefik file-route |
-| 9705 | TCP | media-helpers (Mac) | LAN only — Huntarr UI; Traefik file-route |
 
 _(Live as of Phase 3; Phase-5 rows added. HTTP apps on the **Dell** publish **no**
 host ports — reached only via Traefik labels. The Mac helpers publish LAN ports

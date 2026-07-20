@@ -32,34 +32,8 @@ configs:
                 main: "ragnaforge.xyz"
                 sans:
                   - "*.ragnaforge.xyz"
-  traefik-media-helpers:
-    # Phase 5: the media-helpers stack (byparr/cleanuparr/huntarr) runs on the MAC,
-    # so Traefik's Docker provider (Dell-only, label-based) can't see it. These FILE
-    # routers front those Mac UIs at <app>.ragnaforge.xyz → 10.0.0.71:<port>, reusing
-    # the wildcard cert (tls: {}). Inert until the Mac stack is up (P2). If the Mac is
-    # asleep the backend just 502s. See stacks/media-helpers/compose.yaml.
-    content: |
-      http:
-        routers:
-          byparr:
-            rule: "Host(`byparr.ragnaforge.xyz`)"
-            entryPoints: [websecure]
-            service: byparr
-            tls: {}
-          cleanuparr:
-            rule: "Host(`cleanuparr.ragnaforge.xyz`)"
-            entryPoints: [websecure]
-            service: cleanuparr
-            tls: {}
-        services:
-          byparr:
-            loadBalancer:
-              servers:
-                - url: "http://10.0.0.71:8191"
-          cleanuparr:
-            loadBalancer:
-              servers:
-                - url: "http://10.0.0.71:11011"
+# traefik-media-helpers file-routes (byparr/cleanuparr/huntarr) REMOVED 2026-07-20 —
+# the media-helpers Mac stack was deleted. Re-add a file config here if it ever returns.
 
 services:
   traefik:
@@ -103,8 +77,6 @@ services:
     configs:
       - source: traefik-dynamic
         target: /dynamic/tls.yaml
-      - source: traefik-media-helpers
-        target: /dynamic/media-helpers.yaml
     volumes:
       # Read-only Docker socket for label discovery (routes come from containers).
       - /var/run/docker.sock:/var/run/docker.sock:ro

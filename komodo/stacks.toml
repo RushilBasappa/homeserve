@@ -196,16 +196,6 @@ branch = "main"
 file_paths = ["stacks/plex/compose.yaml"]
 webhook_enabled = false
 
-[[stack]]
-name = "media-helpers"
-description = "Phase-5 — STATELESS self-maintenance workers (byparr/cleanuparr/huntarr) on the Mac."
-tags = ["phase-5", "media", "stateless"]
-
-[stack.config]
-# The ONLY Phase-5 stack on the Mac — stateless helpers only (golden rule).
-server = "ragnaforge-mac"
-repo = "RushilBasappa/homeserve"
-git_provider = "github.com"
-branch = "main"
-file_paths = ["stacks/media-helpers/compose.yaml"]
+# media-helpers (byparr/cleanuparr/huntarr) REMOVED 2026-07-20 — unused; the whole
+# stateless Mac stack was deleted (no self-maintenance workers for now).
 webhook_enabled = false

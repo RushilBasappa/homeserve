@@ -189,18 +189,16 @@ running the behavioural drills.
   `sonarr`, `bazarr`, `unpackerr`, `jellyfin`, `seerr`, `plex`, **`maintainerr`**
   (deployed 2026-07-20; HTTPS 200 via Traefik) (+ edge/infra: `traefik`, `adguard`,
   `homepage`, `wg-easy`, `cloudflare-ddns`, Komodo).
-- **Deployed & healthy on the Mac:** **`byparr`** + **`cleanuparr`** (deployed
-  2026-07-20). Serve on their LAN ports (`byparr` :8191 → 301, `cleanuparr` :11011 →
-  200); Prowlarr reaches byparr **directly at `http://10.0.0.71:8191`** (the designed
-  path). **Note:** their `*.ragnaforge.xyz` UI routes still 404 through Traefik — the
-  file-provider routes aren't in the running Traefik (created before they were added);
-  loading them needs a **Traefik recreate** (inline `configs:` → DestroyStack+DeployStack).
+- **Mac:** runs only the Komodo Periphery agent — **no media stacks**. The
+  `media-helpers` stack (byparr/cleanuparr/huntarr) was **removed** (below).
 - **DESCOPED / removed 2026-07-20:** `jellystat` (unused — Plex stats → Tautulli,
-  PLAN Phase 6) and `huntarr` (pinned image no longer pullable; optional hunter).
-- **Wiring still pending (UI/API, post-deploy):** Maintainerr → Radarr/Sonarr/Jellyfin/
-  Seerr/qBittorrent + the manual "remove" collection (edges 13–16); Byparr as a Prowlarr
-  indexer proxy + tag on bot-protected indexers (edge 5); Cleanuparr → PVRs/qBittorrent
-  (edge 17).
+  PLAN Phase 6); the entire `media-helpers` stack — `huntarr` (pinned image no longer
+  pullable), then `byparr` + `cleanuparr` too (operator: unused). Stack dir + Komodo
+  declaration + Homepage entries + Traefik file-routes + CONVENTIONS ports all removed.
+- **Maintainerr wiring DONE from code** (`stacks/maintainerr/configure/setup.yml`,
+  idempotent): media server = **Plex**, Radarr/Sonarr/Seerr attached & tested OK.
+  Remaining = the manual **"remove" collection** (a UI policy choice) + optional
+  qBittorrent download-client (edge 16).
 - **Acquisition wiring (live):** Prowlarr has **5 indexers** (LimeTorrents, RuTor,
   The Pirate Bay, TorrentDownload, YTS) and **native app-sync** to **2 applications**
   (Radarr, Sonarr); Radarr's download client = **qBittorrent** (via Gluetun). → T011 ✓

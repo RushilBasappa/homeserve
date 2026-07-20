@@ -125,11 +125,11 @@ through Traefik). See `docs/runbooks/phase5-media.md` → "Live-state audit".
 
 - [X] T027 [P] [US3] Author `stacks/arr/configarr/config.yml` — TRaSH quality profiles + custom formats for Radarr and Sonarr (`contracts/wiring.md` edge 7)
 - [ ] T028 [US3] Enable/run Configarr against Radarr/Sonarr; run `quickstart.md` Scenario 9 (profiles match; second run idempotent); record (SC-009, FR-011)
-- [X] T029 [P] [US3] Create `stacks/media-helpers/compose.yaml` (**Mac**) — `byparr`, `cleanuparr`, `huntarr`, run **stateless** (config via env / git RO so the Mac holds no persistent state, per golden rule — see `stack-inventory.md` note), Traefik labels; declare it in `komodo/stacks.toml` (`server = "ragnaforge-mac"`)
-- [ ] T030 [US3] Deploy `media-helpers`; add Byparr as an indexer proxy in Prowlarr (edge 5); connect Cleanuparr → Radarr/Sonarr/qBittorrent (edge 17), pointing at the Dell (`10.0.0.70`) — *DEPLOY done 2026-07-20 (byparr+cleanuparr up on Mac; byparr reachable at 10.0.0.71:8191; **huntarr dropped**); byparr-proxy + cleanuparr wiring = pending UI/API*
-- [ ] T031 [US3] Add Homepage entries and verify valid TLS for `byparr`, `cleanuparr` — *Homepage entries present; **Traefik file-routes 404 until a Traefik recreate loads them** (inline configs)*
-- [ ] T032 [US3] Run `quickstart.md` Scenario 7 (introduce a stalled/blocked download; confirm Cleanuparr removes + blocklists + re-searches with no operator action); record (SC-007, FR-012)
-- [ ] T033 [US3] Confirm Byparr returns results from a bot-protected indexer (FR-014) — *Huntarr clause DROPPED with the stack; byparr-only verification remains*
+- [~] T029 [P] [US3] ~~Create `stacks/media-helpers/compose.yaml`~~ — **DESCOPED / REMOVED 2026-07-20**: the whole media-helpers stack (byparr/cleanuparr; huntarr already dropped) deleted at operator's request — unused. Stack dir + Komodo/Homepage/Traefik-route/CONVENTIONS refs all removed; Mac containers torn down.
+- [~] T030 [US3] ~~Deploy `media-helpers` + wire Byparr/Cleanuparr~~ — **DESCOPED** (stack removed)
+- [~] T031 [US3] ~~Homepage + TLS for byparr/cleanuparr~~ — **DESCOPED** (entries removed)
+- [~] T032 [US3] ~~Scenario 7 (Cleanuparr queue cleanup)~~ — **DESCOPED** (Cleanuparr removed)
+- [~] T033 [US3] ~~Byparr bot-protected indexer verification~~ — **DESCOPED** (Byparr removed)
 
 **Checkpoint**: the library keeps itself clean, complete, and correctly-graded without babysitting.
 
