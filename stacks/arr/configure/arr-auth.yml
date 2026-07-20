@@ -1,0 +1,72 @@
+---
+# stacks/arr/configure/arr-auth.yml — PLANE 3, co-located with the arr stack, run
+# POST-DEPLOY, idempotently. The *arr v4 apps refuse to run without an auth method
+# chosen; this sets Forms authentication with the shared media login on Prowlarr,
+# Radarr, and Sonarr via each app's config/host API (what the UI's "Authentication
+# Required" form submits). The API key (X-Api-Key) bypasses this, so inter-app wiring
+# is unaffected.
+#
+# CREDS: MEDIA_ADMIN_USER / MEDIA_ADMIN_PASSWORD (shared media login) from .mise.toml.
+# RUN:  cd stacks/arr/configure && mise exec -- ansible-playbook arr-auth.yml
+
+- name: arr apps — enable Forms authentication (plane 3)
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    admin_user: "{{ lookup('env', 'MEDIA_ADMIN_USER') }}"
+    admin_pass: "{{ lookup('env', 'MEDIA_ADMIN_PASSWORD') }}"
+    apps:
+      - { name: prowlarr, url: "https://prowlarr.ragnaforge.xyz", api: v1, key: "{{ lookup('env', 'PROWLARR_API_KEY') }}" }
+      - { name: radarr,   url: "https://radarr.ragnaforge.xyz",   api: v3, key: "{{ lookup('env', 'RADARR_API_KEY') }}" }
+      - { name: sonarr,   url: "https://sonarr.ragnaforge.xyz",   api: v3, key: "{{ lookup('env', 'SONARR_API_KEY') }}" }
+
+  tasks:
+    - name: Require the media admin credentials
+      ansible.builtin.assert:
+        that:
+          - admin_user | length > 0
+          - admin_pass | length >= 8
+        fail_msg: "Set MEDIA_ADMIN_USER / MEDIA_ADMIN_PASSWORD in .mise.toml."
+
+    - name: Read each app's host config
+      ansible.builtin.uri:
+        url: "{{ item.url }}/api/{{ item.api }}/config/host"
+        method: GET
+        headers:
+          X-Api-Key: "{{ item.key }}"
+        status_code: 200
+        return_content: true
+      register: host_configs
+      loop: "{{ apps }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Enable Forms auth with the shared media login (idempotent)
+      ansible.builtin.uri:
+        url: "{{ item.item.url }}/api/{{ item.item.api }}/config/host/{{ item.json.id }}"
+        method: PUT
+        headers:
+          X-Api-Key: "{{ item.item.key }}"
+        body_format: json
+        body: >-
+          {{ item.json | combine({
+            'authenticationMethod': 'forms',
+            'authenticationRequired': 'enabled',
+            'username': admin_user,
+            'password': admin_pass,
+            'passwordConfirmation': admin_pass
+          }) }}
+        status_code: [200, 202]
+      when: item.json.authenticationMethod != 'forms'
+      loop: "{{ host_configs.results }}"
+      loop_control:
+        label: "{{ item.item.name }}"
+      no_log: true
+
+    - name: Summary
+      ansible.builtin.debug:
+        msg: >-
+          Prowlarr/Radarr/Sonarr set to Forms auth, login {{ admin_user }} /
+          <media password>. API-key wiring is unaffected. Re-runs are no-ops.
