@@ -1,0 +1,87 @@
+---
+# stacks/seerr/configure/setup.yml — PLANE 3 (application setup), co-located with the
+# seerr stack, run POST-DEPLOY, idempotently. Automates Seerr's first-run with PLEX as
+# the backend (operator's primary server) — no manual wizard (spec FR-023/SC-011).
+#
+# BACKEND = PLEX (operator choice; Jellyfin is the backup server). The Seerr owner is
+# created from the Plex account via the owner token (PLEX_TOKEN, read off the claimed
+# Plex server). Seerr reaches Plex CONTAINER-TO-CONTAINER on the shared `traefik`
+# network at plex:32400 — NOT the public URL (that's the "can't connect to the
+# selected server" trap).
+#
+# CREDS: PLEX_TOKEN from the workstation's gitignored .mise.toml.
+# RUN:  cd stacks/seerr/configure && mise exec -- ansible-playbook setup.yml
+# Radarr/Sonarr fulfilment wiring is a follow-up (needs PVR root folders + profiles).
+
+- name: Seerr first-run setup — Plex backend (plane 3)
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    seerr_url: "https://seerr.ragnaforge.xyz"
+    plex_token: "{{ lookup('env', 'PLEX_TOKEN') }}"
+    # Plex as reached from INSIDE the Seerr container (traefik network).
+    plex_internal_ip: plex
+    plex_internal_port: 32400
+
+  tasks:
+    - name: Require the Plex owner token
+      ansible.builtin.assert:
+        that: plex_token | length > 0
+        fail_msg: "PLEX_TOKEN missing in .mise.toml (read it from the claimed Plex server)."
+
+    - name: Is Seerr already initialized?
+      ansible.builtin.uri:
+        url: "{{ seerr_url }}/api/v1/settings/public"
+        method: GET
+        status_code: 200
+        return_content: true
+      register: seerr_public
+
+    - name: Sign in to Seerr via Plex (first run creates the owner + sets backend=Plex)
+      ansible.builtin.uri:
+        url: "{{ seerr_url }}/api/v1/auth/plex"
+        method: POST
+        body_format: json
+        body:
+          authToken: "{{ plex_token }}"
+        status_code: 200
+        return_content: true
+      register: seerr_auth
+      no_log: true
+
+    - name: Configure the Plex server connection (idempotent upsert)
+      ansible.builtin.uri:
+        url: "{{ seerr_url }}/api/v1/settings/plex"
+        method: POST
+        headers:
+          Cookie: "{{ seerr_auth.cookies_string }}"
+        body_format: json
+        body:
+          ip: "{{ plex_internal_ip }}"
+          port: "{{ plex_internal_port }}"
+          useSsl: false
+        status_code: 200
+        return_content: true
+      register: seerr_plex
+
+    - name: Confirm session + read main settings (incl. API key)
+      ansible.builtin.uri:
+        url: "{{ seerr_url }}/api/v1/settings/main"
+        method: GET
+        headers:
+          Cookie: "{{ seerr_auth.cookies_string }}"
+        status_code: 200
+        return_content: true
+      register: seerr_main
+      no_log: true
+
+    - name: Summary
+      ansible.builtin.debug:
+        msg: >-
+          Seerr initialized: owner created from Plex account, backend = Plex
+          (server '{{ seerr_plex.json.name | default('?') }}', machineId set:
+          {{ (seerr_plex.json.machineId | default('')) | length > 0 }}). API key
+          present: {{ (seerr_main.json.apiKey | default('')) | length > 0 }}.
+          Re-runs are no-ops.

@@ -1,0 +1,80 @@
+---
+# stacks/plex/configure/setup.yml — PLANE 3 (application setup), co-located with the
+# plex stack, run POST-DEPLOY, idempotently. Plex is deployed + CLAIMED by Komodo
+# (PLEX_CLAIM on first run); this play does the rest from code: add the Movies/TV
+# libraries and enable Intel QuickSync HW transcode (operator has Plex Pass). Same
+# pattern as the jellyfin/seerr setup plays.
+#
+# AUTH: PLEX_TOKEN (the claimed server's owner token) is read off the running server
+# after claim and stored in the workstation .mise.toml. On a clean rebuild, re-read
+# it after claiming (Preferences.xml → PlexOnlineToken).
+#
+# RUN:  cd stacks/plex/configure && mise exec -- ansible-playbook setup.yml
+
+- name: Plex first-run setup (plane 3)
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    plex_url: "https://plex.ragnaforge.xyz"
+    plex_token: "{{ lookup('env', 'PLEX_TOKEN') }}"
+    # Library paths as seen INSIDE the plex container (compose maps
+    # /srv/nfs/media -> /media:ro).
+    movies_path: "/media/movies"
+    tv_path: "/media/tv"
+
+  tasks:
+    - name: Require the Plex token
+      ansible.builtin.assert:
+        that: plex_token | length > 0
+        fail_msg: "PLEX_TOKEN missing in .mise.toml (read it from the claimed server)."
+
+    - name: List existing Plex library sections
+      ansible.builtin.uri:
+        url: "{{ plex_url }}/library/sections"
+        method: GET
+        headers:
+          X-Plex-Token: "{{ plex_token }}"
+          Accept: application/json
+        status_code: 200
+        return_content: true
+      register: plex_sections
+
+    - name: Set existing-section-titles fact
+      ansible.builtin.set_fact:
+        section_titles: "{{ plex_sections.json.MediaContainer.Directory | default([]) | map(attribute='title') | list }}"
+
+    - name: Add the Movies library (idempotent)
+      ansible.builtin.uri:
+        url: "{{ plex_url }}/library/sections?name=Movies&type=movie&agent=tv.plex.agents.movie&scanner=Plex%20Movie&language=en-US&location={{ movies_path }}"
+        method: POST
+        headers:
+          X-Plex-Token: "{{ plex_token }}"
+          Accept: application/json
+        status_code: [200, 201]
+      when: "'Movies' not in section_titles"
+
+    - name: Add the TV library (idempotent)
+      ansible.builtin.uri:
+        url: "{{ plex_url }}/library/sections?name=TV&type=show&agent=tv.plex.agents.series&scanner=Plex%20TV%20Series&language=en-US&location={{ tv_path }}"
+        method: POST
+        headers:
+          X-Plex-Token: "{{ plex_token }}"
+          Accept: application/json
+        status_code: [200, 201]
+      when: "'TV' not in section_titles"
+
+    - name: Enable Intel QuickSync hardware transcoding (upsert; idempotent)
+      ansible.builtin.uri:
+        url: "{{ plex_url }}/:/prefs?HardwareAcceleratedCodecs=1"
+        method: PUT
+        headers:
+          X-Plex-Token: "{{ plex_token }}"
+        status_code: [200]
+
+    - name: Summary
+      ansible.builtin.debug:
+        msg: >-
+          Plex ready: Movies+TV libraries present, QuickSync HW transcode enabled.
+          Re-runs are no-ops.

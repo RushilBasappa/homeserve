@@ -143,7 +143,7 @@
 
 - [X] T034 [US4] **RAM headroom gate** — measure the Dell's free RAM under a Jellyfin transcode + active download load; record in the runbook a go/defer decision for Plex per plan Complexity Tracking (defer to Phase 12 if it won't fit). Do not deploy Plex if the gate fails
 - [X] T035 [US4] Create `stacks/plex/compose.yaml` (Dell) — `/dev/dri` QuickSync, `plex-config` volume, `/srv/nfs/media` **RO**, `PLEX_CLAIM=${PLEX_CLAIM}` (first-run), Traefik labels; declare in `komodo/stacks.toml` (Dell)
-- [ ] T036 [US4] Deploy `plex`; claim the server, add Movies/TV libraries on `/srv/nfs/media`, enable QuickSync HW transcode (Plex Pass)
+- [X] T036 [US4] Deploy `plex`; claim the server, add Movies/TV libraries on `/srv/nfs/media`, enable QuickSync HW transcode (Plex Pass)
 - [X] T037 [P] [US4] Create `stacks/jellystat/compose.yaml` (Dell) — `jellystat` + `jellystat-db` (Postgres, `jellystat-db` volume), Traefik labels; declare in `komodo/stacks.toml` (Dell)
 - [ ] T038 [US4] Deploy `jellystat`; connect it to Jellyfin (API key minted at wiring time); confirm stats populate
 - [ ] T039 [US4] Add Homepage entries and verify valid TLS for `plex` and `jellystat`
