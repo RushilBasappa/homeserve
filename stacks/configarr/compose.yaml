@@ -1,0 +1,87 @@
+# configarr — quality-from-code as its OWN one-shot stack (split out of `arr`).
+#
+# WHY A SEPARATE STACK: configarr is a run-once job (`restart: "no"`) — it applies
+# TRaSH quality profiles/custom formats to Radarr/Sonarr and exits 0. Komodo derives
+# a stack's health from whether ALL its containers are `running`, with no concept of
+# a "completed job", so an exited-0 configarr made the whole `arr` stack read
+# `unhealthy` forever. Isolating it here keeps `arr` genuinely all-green (a real
+# service dying is then a meaningful signal) while configarr does its thing and exits.
+#
+# NETWORK: joins the EXISTING `arr_arr` network (created by the `arr` stack) as
+# external, so it reaches the PVRs by service name (http://radarr:7878, etc.).
+# Deploy this AFTER the `arr` stack is up and the PVRs are healthy.
+#
+# CONFIG: shipped INLINE via `configs:` content (materialised inside the container),
+# NOT a host bind — Komodo Periphery runs in a container with /etc/komodo as a named
+# volume, so a relative bind resolves to a host path the daemon can't find → an EMPTY
+# mount and "Config file not found". Inline `configs:` (see stacks/homepage +
+# stacks/traefik) sidesteps it. The `!env` tags resolve from the service environment
+# (keys forwarded from mise via the Periphery agent env).
+
+configs:
+  configarr-config:
+    content: |
+      # quality-from-code (research R5/R6; wiring edge 7). Configarr syncs
+      # TRaSH-Guides quality profiles + custom formats into Radarr and Sonarr from
+      # THIS block, idempotently (a second run reports no changes — SC-009). This is
+      # the ONLY source of truth for quality profiles; they are never hand-entered.
+      # Template IDs are version-sensitive to the TRaSH/Recyclarr guides — bump
+      # deliberately; verify at https://configarr.de and https://trash-guides.info.
+      trashGuideUrl: https://github.com/TRaSH-Guides/Guides
+      recyclarrConfigUrl: https://github.com/recyclarr/config-templates
+
+      radarr:
+        radarr-main:
+          base_url: http://radarr:7878
+          api_key: !env RADARR_API_KEY
+
+          quality_definition:
+            type: movie
+
+          # 1080p-first, transcode-friendly on the i3-10110U (QuickSync). Adjust to taste.
+          include:
+            - template: radarr-quality-definition-movie
+            - template: radarr-quality-profile-hd-bluray-web
+            - template: radarr-custom-formats-hd-bluray-web
+
+          custom_formats: []
+
+      sonarr:
+        sonarr-main:
+          base_url: http://sonarr:8989
+          api_key: !env SONARR_API_KEY
+
+          quality_definition:
+            type: series
+
+          include:
+            - template: sonarr-quality-definition-series
+            - template: sonarr-v4-quality-profile-web-1080p
+            - template: sonarr-v4-custom-formats-web-1080p
+
+          custom_formats: []
+
+services:
+  configarr:
+    image: ghcr.io/raydak-labs/configarr:1.13.1
+    container_name: configarr
+    restart: "no"
+    environment:
+      TZ: America/Los_Angeles
+      # Resolve the config's `!env` tags — the deterministic keys forwarded from
+      # mise via the Periphery agent env (komodo/bootstrap/periphery.compose.yaml).
+      RADARR_API_KEY: ${RADARR_API_KEY}
+      SONARR_API_KEY: ${SONARR_API_KEY}
+    configs:
+      # Materialised from the top-level `configs:` block (NOT a host bind — see note).
+      - source: configarr-config
+        target: /app/config/config.yml
+    networks:
+      - arr
+
+networks:
+  # The PVR network created by the `arr` stack — joined here as external so
+  # configarr can reach radarr/sonarr by service name.
+  arr:
+    external: true
+    name: arr_arr

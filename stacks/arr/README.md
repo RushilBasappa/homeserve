@@ -16,7 +16,7 @@ a Seerr request and a hardlinked file in `/srv/nfs/media` lives here.
 | `sonarr` | TV PVR | `sonarr.ragnaforge.xyz` |
 | `bazarr` | subtitles | `bazarr.ragnaforge.xyz` |
 | `unpackerr` | extracts archived releases for the PVRs | — |
-| `configarr` | applies TRaSH quality profiles (inline `configs:` in compose) | — (one-shot) |
+| `configarr` | applies TRaSH quality profiles — its **own** stack (`stacks/configarr/`) | — (one-shot) |
 
 ## Egress model (the whole point)
 
@@ -75,17 +75,22 @@ unmaintained).
 
 ## Quality from code (Configarr)
 
-The TRaSH quality profiles and custom formats are shipped **inline** in a top-level
-`configs:` block in `compose.yaml` and materialised at `/app/config/config.yml`. The
-`configarr` service applies them to Radarr/Sonarr and exits; a second run is a no-op
-(SC-009). The config's `!env RADARR_API_KEY` / `!env SONARR_API_KEY` tags resolve from
-the service environment (keys forwarded from mise via the Periphery agent).
+Configarr lives in its **own** stack — `stacks/configarr/` — not here. It's a
+run-once job: it applies the TRaSH quality profiles/custom formats to Radarr/Sonarr
+and exits 0 (a second run is a no-op — SC-009). Komodo judges a stack `unhealthy`
+whenever any container isn't `running`, so keeping an intentionally-exited job inside
+`arr` made the whole stack read unhealthy forever; splitting it out keeps `arr`
+all-green. The configarr stack joins this stack's `arr_arr` network (external) to
+reach the PVRs, so **deploy it after `arr` is up and the PVRs are healthy**.
 
-Why inline and not a bind mount: Komodo Periphery runs in a container with
-`/etc/komodo` as a named volume, so a relative host bind (`./configarr:/app/config`)
+The config is shipped **inline** via a top-level `configs:` block (materialised at
+`/app/config/config.yml`), not a host bind: Komodo Periphery runs in a container with
+`/etc/komodo` as a named volume, so a relative bind (`./configarr:/app/config`)
 resolves to a host path the daemon can't find — Docker silently mounts an empty dir
 and Configarr dies with "Config file not found". Inline `configs:` (the same pattern
-`homepage`/`traefik` use) sidesteps this entirely.
+`homepage`/`traefik` use) sidesteps this. The `!env RADARR_API_KEY` /
+`!env SONARR_API_KEY` tags resolve from the service environment (keys forwarded from
+mise via the Periphery agent).
 
 ## Image tags
 

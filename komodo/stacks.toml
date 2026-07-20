@@ -116,7 +116,7 @@ webhook_enabled = false
 
 [[stack]]
 name = "arr"
-description = "Phase-5 — acquisition backbone (gluetun/qbit + prowlarr/radarr/sonarr/bazarr + unpackerr/configarr)."
+description = "Phase-5 — acquisition backbone (gluetun/qbit + prowlarr/radarr/sonarr/bazarr + unpackerr)."
 tags = ["phase-5", "media"]
 
 [stack.config]
@@ -125,6 +125,23 @@ repo = "RushilBasappa/homeserve"
 git_provider = "github.com"
 branch = "main"
 file_paths = ["stacks/arr/compose.yaml"]
+webhook_enabled = false
+
+# configarr is a run-once job (applies TRaSH quality profiles, then exits 0). It
+# lives in its OWN stack so its intentional exit doesn't make the `arr` stack read
+# `unhealthy` in Komodo. Joins the `arr` stack's `arr_arr` network (external) to
+# reach the PVRs — deploy it AFTER `arr` is up and the PVRs are healthy.
+[[stack]]
+name = "configarr"
+description = "Phase-5 — one-shot quality-from-code (TRaSH profiles/custom formats → Radarr/Sonarr)."
+tags = ["phase-5", "media"]
+
+[stack.config]
+server = "ragnaforge-dell"
+repo = "RushilBasappa/homeserve"
+git_provider = "github.com"
+branch = "main"
+file_paths = ["stacks/configarr/compose.yaml"]
 webhook_enabled = false
 
 [[stack]]
