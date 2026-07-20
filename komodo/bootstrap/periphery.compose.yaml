@@ -60,10 +60,8 @@ services:
       BAZARR_API_KEY: ${BAZARR_API_KEY}
       # qBittorrent human-login password.
       QBIT_WEBUI_PASSWORD: ${QBIT_WEBUI_PASSWORD}
-      # P2 (plex / jellystat) — forwarded now so Periphery isn't recreated again.
+      # P2 (plex) — forwarded now so Periphery isn't recreated again.
       PLEX_CLAIM: ${PLEX_CLAIM}
-      JELLYSTAT_DB_PASSWORD: ${JELLYSTAT_DB_PASSWORD}
-      JELLYSTAT_JWT_SECRET: ${JELLYSTAT_JWT_SECRET}
     volumes:
       # Drive the node's Docker engine.
       - /var/run/docker.sock:/var/run/docker.sock

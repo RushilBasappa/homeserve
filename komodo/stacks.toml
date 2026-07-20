@@ -110,7 +110,7 @@ webhook_enabled = false
 # stack-inventory). Every STATEFUL stack is pinned to ragnaforge-dell (library
 # disk + iGPU + golden rule); only the stateless `media-helpers` runs on the Mac.
 # All manual (webhook_enabled=false). Bring-up order in docs/runbooks/phase5-media.md:
-# arr → jellyfin → seerr → maintainerr (P1) → [RAM gate] → plex → jellystat →
+# arr → jellyfin → seerr → maintainerr (P1) → [RAM gate] → plex →
 # media-helpers (P2).
 # ============================================================================
 
@@ -177,19 +177,6 @@ repo = "RushilBasappa/homeserve"
 git_provider = "github.com"
 branch = "main"
 file_paths = ["stacks/plex/compose.yaml"]
-webhook_enabled = false
-
-[[stack]]
-name = "jellystat"
-description = "Phase-5 — Jellyfin watch stats + its Postgres (P2)."
-tags = ["phase-5", "media"]
-
-[stack.config]
-server = "ragnaforge-dell"
-repo = "RushilBasappa/homeserve"
-git_provider = "github.com"
-branch = "main"
-file_paths = ["stacks/jellystat/compose.yaml"]
 webhook_enabled = false
 
 [[stack]]

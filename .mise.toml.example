@@ -109,12 +109,6 @@ QBIT_WEBUI_PASSWORD = "changeme-qbittorrent-webui-password"
 # until you deploy Plex, then paste a fresh claim-xxxx token and re-sync.
 PLEX_CLAIM = "changeme-plex-claim-token"
 
-# Jellystat (P2, US4) — internal Postgres password + session-signing secret. The DB
-# is never published (jellystat network only), but set a real password anyway.
-# Generate each with e.g. `openssl rand -hex 32`.
-JELLYSTAT_DB_PASSWORD = "changeme-jellystat-db-password"
-JELLYSTAT_JWT_SECRET  = "changeme-jellystat-jwt-secret"
-
 # Shared media login — ONE username/password used across the media tools that need
 # a login (Jellyfin admin; Seerr owner is created from the Jellyfin admin; can also
 # be reused for qBittorrent / Jellystat). Consumed by the first-run Ansible plays

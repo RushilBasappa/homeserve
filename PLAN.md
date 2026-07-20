@@ -151,17 +151,38 @@ everything else drops into.
   when media outgrows the internal disk.
 - **Deliverable:** consistent `/media` + config layout. **Depends on:** Phase 1.
 
-### Phase 5 — Media stack (ARR + Jellyfin)
+### Phase 5 — Media stack (ARR + Jellyfin & Plex)
 **Objective:** downloadable, interconnected media over a VPN egress.
 - **Gluetun** (WireGuard egress + killswitch) → **qBittorrent** routed through it.
 - **Prowlarr** → **Radarr** / **Sonarr** / **Bazarr** (subtitles).
-- **Jellyfin** (QuickSync HW transcode) + **Jellyseerr** (requests).
+- **Jellyfin** & **Plex** (both QuickSync HW transcode, one shared `/srv/nfs/media`
+  library) + **Jellyseerr** (requests).
 - **Interconnection without custom API roles:** Prowlarr's built-in app-sync +
   **Configarr** container for TRaSH quality profiles/custom formats.
 - **Deliverable:** request → download (via VPN) → library → play.
   **Depends on:** Phases 3, 4.
 
-### Phase 6 — Apps
+### Phase 6 — Media & system stats
+**Objective:** see the audience and the load — who's watching what, and whether
+the box can take it. Dashboards/visibility only; push alerting lands in Phase 9.
+- **Tautulli** (Plex watch stats) — per-user history, now-playing, per-stream
+  bandwidth, and the **direct-play vs transcode** breakdown (the number that
+  tells you when Plex is cooking the i3's iGPU/CPU). Talks to Plex read-only via
+  the server token; its SQLite history DB → **Dell** (golden rule). Traefik-routed
+  at `tautulli.ragnaforge.xyz`; Homepage now-playing widget. (Plex is the primary
+  server — the earlier Jellyfin-stats tool *Jellystat* was dropped as unused.)
+- **Beszel** (host + container metrics) — a hub on the Dell + a lightweight agent
+  on the Mac give **one fleet view**: CPU, RAM, disk usage %, network, temps, and
+  per-container stats, with thresholds. Chosen over Netdata (heavier, cloud-nudgey)
+  and Prometheus/Grafana (multi-GB — deferred) to fit the 7.5 GB nodes. Traefik-
+  routed at `beszel.ragnaforge.xyz`; Homepage widget. (Disk *health*/SMART via
+  Scrutiny intentionally skipped for now — Beszel's usage % is enough.)
+- Notifications are **deferred**: Beszel thresholds → **ntfy** push wiring lands in
+  Phase 9 (Alerting). This phase is dashboards only.
+- **Deliverable:** open one page and see current streams + per-node load.
+  **Depends on:** Phases 3, 5.
+
+### Phase 7 — Apps
 **Objective:** the rest of the lab.
 - **Immich** (photos), **Home Assistant**, **Actual Budget**, **Vaultwarden**
   (passwords), **n8n** (automation).
@@ -169,7 +190,7 @@ everything else drops into.
 - **Deliverable:** all apps at `https://<name>.ragnaforge.xyz`.
   **Depends on:** Phase 3.
 
-### Phase 7 — VPN #2 (wg-easy)
+### Phase 8 — VPN #2 (wg-easy)
 **Objective:** family/friends + Fire TV on the network, easy onboarding.
 - **wg-easy** stack on the Dell; router forwards **UDP 51820 → 10.0.0.70**;
   admin UI bound to LAN/Tailscale only (never forwarded).
@@ -179,32 +200,33 @@ everything else drops into.
   the WireGuard app (no QR — no camera).
 - Optional **nftables** rule fencing friend clients to media (Jellyfin) only.
 - **Deliverable:** a remote device joins from a fresh `.conf` and reaches
-  `https://jellyfin.ragnaforge.xyz`. **Depends on:** Phases 3, 6.
+  `https://jellyfin.ragnaforge.xyz`. **Depends on:** Phases 3, 7.
 
-### Phase 8 — Monitoring & alerts
+### Phase 9 — Alerting (up/down + push)
 **Objective:** know when a disk fills or an app dies — on your phone.
-- **Beszel** (light host/container metrics + thresholds) + **Uptime Kuma**
-  (service up/down) → **ntfy** (self-hosted push to phone app).
-- Alert rules: disk > 85%, any monitored service down.
+- **Uptime Kuma** (service up/down probes) → **ntfy** (self-hosted push to phone app).
+- Wire alert rules into ntfy: **Beszel** thresholds from Phase 6 (disk > 85%,
+  sustained high load), any Uptime-Kuma-monitored service down, optionally select
+  Tautulli events.
 - (Prometheus/Grafana intentionally skipped — too heavy for 7.5 GB nodes; optional later.)
-- **Deliverable:** a test alert reaches your phone. **Depends on:** Phase 3.
+- **Deliverable:** a test alert reaches your phone. **Depends on:** Phases 3, 6.
 
-### Phase 9 — Backups
+### Phase 10 — Backups
 **Objective:** protect the irreplaceable (photos, passwords, finances, configs).
 - **Backrest** (Restic GUI); local repo now, offsite (Backblaze B2) as a one-line add.
 - Pre-backup **DB dumps** for Immich (Postgres) and Vaultwarden.
 - Schedules + retention; documented **restore** procedure.
-- **Deliverable:** a verified restore of one app's config. **Depends on:** Phase 6.
+- **Deliverable:** a verified restore of one app's config. **Depends on:** Phase 7.
 
-### Phase 10 — Auto-update & maintenance
+### Phase 11 — Auto-update & maintenance
 **Objective:** stay current without surprise breakage.
 - **Diun** — notifies (via ntfy) when a new image is available.
 - Update deliberately via **Komodo** redeploy (not blind `:latest` auto-pull).
 - Optional **Renovate** on the git repo for pinned versions.
 - **Deliverable:** update notifications + a documented update flow.
-  **Depends on:** Phases 2, 8.
+  **Depends on:** Phases 2, 9.
 
-### Phase 11 — Documentation & handoff (the shareable report)
+### Phase 12 — Documentation & handoff (the shareable report)
 **Objective:** the reproduce-from-scratch artifact.
 - Finalize `README.md` + `docs/runbooks/` (indexers, media libraries, per-app setup).
 - "Stand it up from zero" guide; secrets handled via `.mise.toml.example`.
@@ -212,11 +234,11 @@ everything else drops into.
 - **Deliverable:** a document a friend could follow end-to-end.
   **Depends on:** all.
 
-### Phase 12 — Migrate to the Mac Mini (future)
+### Phase 13 — Migrate to the Mac Mini (future)
 **Objective:** consolidate the whole server onto one powerful box (2018 Intel Mac
 Mini, 32 GB RAM, 2 TB) that *also* serves as a macOS desktop (Illustrator,
 Photoshop, general-purpose apps) — removing the RAM and storage constraints that
-shaped Phases 1–11.
+shaped Phases 1–12.
 
 **Why this is a migration, not a rewrite:** the Compose + Komodo design is
 host-portable. The Mac Mini's Linux VM is just another Debian + Docker + Komodo
@@ -267,7 +289,7 @@ node, so moving in reuses the same "add a node" workflow from §3.
 
 - **Deliverable:** the full stack running in the Mac Mini VM, laptops retired or
   demoted to spares, macOS free for Adobe/desktop use. **Depends on:** a stable
-  Phases 1–11 build to migrate from.
+  Phases 1–12 build to migrate from.
 
 ---
 
@@ -292,7 +314,9 @@ node, so moving in reuses the same "add a node" workflow from §3.
 | Passwords | Vaultwarden |
 | Automation | n8n |
 | Dashboard | Homepage |
-| Monitoring | Beszel + Uptime Kuma |
+| Media stats (Plex) | Tautulli |
+| Host/container metrics | Beszel |
+| Uptime (up/down) | Uptime Kuma |
 | Alerts | ntfy |
 | Backups | Backrest (Restic) |
 | Update notify | Diun (+ optional Renovate) |
@@ -306,3 +330,17 @@ node, so moving in reuses the same "add a node" workflow from §3.
 - A commercial VPN with **WireGuard** credentials for Gluetun egress — present in `.mise.toml`.
 - **Rotate** the Tailscale auth key + Cloudflare token (surfaced during planning).
 - Decide at build time: enforce **nftables** friend-restriction, or trust full-LAN access.
+
+### Deferred — do once the full stack is running & stable
+- **Spread load across both nodes to use the Mac's RAM/CPU.** No failover goal — just
+  distribute stacks (Komodo pins each to a node via `server =`; reversible anytime, no
+  data migration since files stay on the Dell's `/srv/nfs`).
+  - Candidate split for media: **display (Jellyfin) stays on the Dell** (near storage);
+    move **download/automation (qBittorrent+Gluetun, *arr) to `ragnaforge-mac`** — they
+    reach `/srv/nfs` over the existing Dell→Mac NFS mount.
+  - Rules when moving an app to the Mac: (1) mount `/srv/nfs` at the **same container
+    path on both nodes** (*arr store absolute paths); (2) keep `downloads/` + `media/`
+    under the **one NFS mount** so qBit→Radarr→Jellyfin **hardlinks** stay on one
+    filesystem; (3) Mac apps can't join the Dell's `traefik` Docker network — publish a
+    host port and front any web UI via a **Traefik file-provider route → 10.0.0.71:port**
+    (see [[homeserve-traefik-mac-routing]]).

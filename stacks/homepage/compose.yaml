@@ -66,10 +66,6 @@ configs:
               icon: maintainerr.png
               href: https://maintainerr.ragnaforge.xyz
               description: Manual six-surface cascade delete
-          - Jellystat:
-              icon: jellyfin.png
-              href: https://jellystat.ragnaforge.xyz
-              description: Jellyfin watch statistics (P2)
       - Acquisition:
           - qBittorrent:
               icon: qbittorrent.png
@@ -99,10 +95,6 @@ configs:
               icon: cleanuparr.png
               href: https://cleanuparr.ragnaforge.xyz
               description: Queue cleanup (Mac, stateless)
-          - Huntarr:
-              icon: huntarr.png
-              href: https://huntarr.ragnaforge.xyz
-              description: Missing/upgrade hunter (Mac, stateless)
   homepage-widgets:
     content: |
       - resources:

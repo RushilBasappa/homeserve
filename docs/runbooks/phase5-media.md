@@ -178,6 +178,37 @@ Plex as the **primary** server (Jellyfin = backup), so Plex proceeds now, not de
 
 ---
 
+## Live-state audit (2026-07-20)
+
+Snapshot of what is actually deployed/wired, taken directly from the running fleet
+(`docker ps` on both nodes + each app's API through Traefik). Backs the reconciliation
+of `tasks.md` against reality; the SC scenario table below is still to be filled by
+running the behavioural drills.
+
+- **Deployed & healthy on the Dell:** `gluetun`, `qbittorrent`, `prowlarr`, `radarr`,
+  `sonarr`, `bazarr`, `unpackerr`, `jellyfin`, `seerr`, `plex` (+ edge/infra:
+  `traefik`, `adguard`, `homepage`, `wg-easy`, `cloudflare-ddns`, Komodo).
+- **NOT deployed:** `maintainerr`, `jellystat` (Dell), and `media-helpers`
+  (`byparr`/`cleanuparr`/`huntarr`, Mac — Mac runs only the Periphery agent).
+- **Acquisition wiring (live):** Prowlarr has **5 indexers** (LimeTorrents, RuTor,
+  The Pirate Bay, TorrentDownload, YTS) and **native app-sync** to **2 applications**
+  (Radarr, Sonarr); Radarr's download client = **qBittorrent** (via Gluetun). → T011 ✓
+- **Reachability/TLS (live):** every deployed UI answers through Traefik with a valid
+  cert — `qbittorrent`/`bazarr` `200`, `prowlarr`/`radarr`/`sonarr`/`jellyfin` `302`
+  (Forms/login), `seerr` `307`, `plex` `401` (all up). → T012 ✓ (backbone), T017 ✓
+  (jellyfin/seerr). **Note:** SC-010 is *not* a full pass — maintainerr/jellystat/
+  helpers UIs are absent, so "100% of UIs" is unmet until they deploy.
+- **Quality from code:** Radarr carries a custom **"UHD + 1080p (efficient)"** profile
+  (the "small 4K else 1080p" policy) → Configarr has run at least once; **custom
+  formats = 0** (TRaSH CF sync not populated), so T028/SC-009 is **partial** — profile
+  present, full TRaSH CF match + idempotent-rerun proof still to record.
+- **Library state:** Radarr tracks **1 movie** (*The Hunger Games: Catching Fire*),
+  Sonarr **0 series** → a request/grab has been exercised, but SC-001 request→play was
+  not run end-to-end or recorded.
+- **Secret/state sanity (T043 ✓):** `git grep` shows only `${VAR}`/`lookup('env')`
+  references (no committed secret values); `/srv/nfs` holds only
+  `downloads`/`media`/`photos` (no app config); the Mac holds no persistent media state.
+
 ## Verification evidence (SC-001..011)
 
 Behavioural proof per `specs/006-media-stack/quickstart.md`. Fill in as each scenario

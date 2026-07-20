@@ -20,26 +20,28 @@
 6. **US4 (P2, RAM-gated)** → Plex + Jellystat → prove **dual-server on one library + stats**.
 7. **Polish** → reachability, reproducible-wiring proof, secret/state sanity, docs.
 
-## Implementation status (2026-07-20)
+## Implementation status (reconciled against the live fleet, 2026-07-20)
 
-- **All code/config/docs authored; live deploy + verification pending.** Every
-  reproducible-from-code deliverable is written and syntax-checked: all stack
-  `compose.yaml` files (`arr`, `jellyfin`, `seerr`, `maintainerr`, `plex`,
-  `jellystat`, `media-helpers`), the plane-3 wiring (`stacks/arr/configure/wire.yml`),
-  the Configarr config, all Komodo stack declarations + shared variables, the new
-  secret placeholders, the Homepage entries, the Traefik file-routes for the Mac
-  helpers, the CONVENTIONS "three planes" section + ports table, and the Phase-5
-  runbook. T043's committed-code secret/state sanity checks pass.
-- **Remaining = live-only work** that cannot be done autonomously here: filling real
-  Proton/Plex secrets + `make sync-secrets` (T004), Komodo deploys (T008/T014/T016/
-  T023/T028/T030/T036/T038), first-run setup (qBittorrent auth-bypass, Jellyfin admin
-  + libraries, Plex claim, indexer add, Maintainerr "remove" collection), running
-  `wire.yml` against healthy apps (T010), the **RAM headroom gate** go/defer judgment
-  (T034), and every behavioral verification (T011/T012/T017–T021/T024–T026/T031–T033/
-  T039–T042/T045). See the per-task `[ ]` boxes and `docs/runbooks/phase5-media.md`.
-- Phasing enforces the RAM gate: land P1 (US1+US2) first; **US4/Plex is gated on a
-  measured-headroom check (T034)** — if the Dell can't hold both servers under
-  transcode load, Plex defers to Phase 12 (Mac Mini), per plan Complexity Tracking.
+Audited directly from the running nodes (`docker ps` on Dell + Mac, each app's API
+through Traefik). See `docs/runbooks/phase5-media.md` → "Live-state audit".
+
+- **Backbone + servers are LIVE and wired.** Deployed & healthy on the Dell: the full
+  `arr` stack (`gluetun`/`qbittorrent`/`prowlarr`/`radarr`/`sonarr`/`bazarr`/`unpackerr`),
+  `jellyfin`, `seerr`, `plex`. Prowlarr has 5 indexers with native app-sync to
+  Radarr/Sonarr; Radarr's download client is qBittorrent-via-Gluetun; a custom quality
+  profile is applied. Every deployed UI answers through Traefik with a valid cert.
+  → T004–T017, T034–T037 done; T043 (secret/state sanity) verified.
+- **NOT yet deployed** (these stacks' `compose.yaml` exist but no container is running):
+  `maintainerr` (US2 → T023–T026), `media-helpers` byparr/cleanuparr/huntarr on the Mac
+  (US3 → T030–T033), `jellystat` (US4 stats → T038–T040).
+- **Behavioural verification still unrun/unrecorded** — the SC-001..011 evidence table
+  in the runbook is empty: request→play (T018), killswitch/no-leak (T019), port-sync
+  (T020), hardlink (T021), Configarr Scenario 9 / TRaSH CF match (T028 — profile present
+  but custom formats = 0, so partial), reachability SC-010 (T041 — not 100% until the
+  three stacks above deploy), wiring-reproducible SC-011 (T042), and the capstone
+  consolidation/sign-off (T045).
+- Phasing enforces the RAM gate: **T034 passed (Plex is live alongside Jellyfin)**;
+  P2 remainder (maintainerr, helpers, jellystat) + behavioural drills are what's left.
 
 ---
 
@@ -68,8 +70,8 @@
 - [X] T008 Deploy `arr` via Komodo; confirm every container is healthy, Gluetun's tunnel is up (Proton exit IP), and qBittorrent's WebUI is reachable through Gluetun at `qbittorrent.ragnaforge.xyz`
 - [X] T009 Create `stacks/arr/configure/wire.yml` — an **idempotent** Ansible `uri` play implementing `contracts/wiring.md` edges 1–4, 8–9, 11–12 (qBittorrent → Radarr/Sonarr download client; Radarr/Sonarr → Prowlarr applications; Bazarr → Radarr/Sonarr), GET-then-POST so a re-run is a no-op; fail loudly on API rejection
 - [X] T010 Run `stacks/arr/configure/wire.yml` **after** the arr apps are healthy (keys pinned); confirm a second run reports **no changes** (idempotent — SC-011 precondition)
-- [ ] T011 Add at least one torrent indexer in Prowlarr and confirm Prowlarr **native app-sync** propagated it into Radarr and Sonarr (edge 6 — no play step); record in the runbook
-- [ ] T012 Add Homepage entries and verify valid TLS for `qbittorrent`, `prowlarr`, `radarr`, `sonarr`, `bazarr` at `https://<app>.ragnaforge.xyz`
+- [X] T011 Add at least one torrent indexer in Prowlarr and confirm Prowlarr **native app-sync** propagated it into Radarr and Sonarr (edge 6 — no play step); record in the runbook — *live: 5 indexers + app-sync to Radarr/Sonarr confirmed (2026-07-20 audit)*
+- [X] T012 Add Homepage entries and verify valid TLS for `qbittorrent`, `prowlarr`, `radarr`, `sonarr`, `bazarr` at `https://<app>.ragnaforge.xyz` — *live: Homepage entries present + all 5 answer through Traefik with a valid cert (2026-07-20 audit)*
 
 **Checkpoint**: a manual search in Radarr grabs → qBittorrent downloads via Proton → imports to `/srv/nfs/media`. The backbone is live and wired from code.
 
@@ -85,7 +87,7 @@
 - [X] T014 [US1] Deploy `jellyfin`; complete first-run (admin), add **Movies** (`/srv/nfs/media/movies`) and **TV** (`/srv/nfs/media/tv`) libraries; confirm HW transcode uses QuickSync
 - [X] T015 [P] [US1] Create `stacks/seerr/compose.yaml` (Dell) — `seerr-config` volume, Traefik labels; declare it in `komodo/stacks.toml` (Dell)
 - [X] T016 [US1] Deploy `seerr`; connect Seerr → Jellyfin (backend) and Seerr → Radarr/Sonarr (`contracts/wiring.md` edges 8–10) using the pinned keys / admin login (extend `wire.yml` or Seerr setup); confirm a Seerr request reaches Radarr/Sonarr
-- [ ] T017 [US1] Add Homepage entries and verify valid TLS for `jellyfin` and `seerr`
+- [X] T017 [US1] Add Homepage entries and verify valid TLS for `jellyfin` and `seerr` — *live: Homepage entries present + both answer through Traefik with a valid cert (2026-07-20 audit)*
 - [ ] T018 [US1] Run `quickstart.md` Scenario 1 (request one movie → download → import → play in Jellyfin); record evidence in the runbook (SC-001, FR-001/002/005)
 - [ ] T019 [US1] Run `quickstart.md` Scenario 2 (stop `gluetun`; confirm qBittorrent egresses **nothing** over the home line and the observed IP was only Proton; restart → auto-resume); record (SC-002, FR-003)
 - [ ] T020 [US1] Run `quickstart.md` Scenario 3 (qBittorrent shows connectable/open port = Proton's forwarded port; restart `gluetun`; confirm the listen port auto-re-syncs); record (SC-002a, FR-003a)
@@ -133,21 +135,26 @@
 
 ---
 
-## Phase 6: User Story 4 — Both media servers + stats (Priority: P2) — RAM-gated
+## Phase 6: User Story 4 — Both media servers (Priority: P2) — RAM-gated
 
-**Goal**: The same library is playable from both Jellyfin and Plex (one on-disk copy); watch stats are visible.
+**Goal**: The same library is playable from both Jellyfin and Plex (one on-disk copy).
 
-**Independent Test**: `quickstart.md` Scenario 8 — the same title plays from Jellyfin and Plex against one file; stats show for a played title.
+> **DESCOPED 2026-07-20:** Jellystat (Jellyfin watch stats) removed at the operator's
+> request — Plex is the primary server and Jellyfin-side stats aren't wanted. Plex
+> watch stats are picked up separately by **Tautulli** in PLAN.md **Phase 6 (Media &
+> system stats)**. T037/T038 (jellystat) are dropped; T039/T040 reduced to Plex-only.
+
+**Independent Test**: `quickstart.md` Scenario 8 — the same title plays from Jellyfin and Plex against one file.
 
 > Depends on US1 (library + Jellyfin). **Gated by T034.**
 
 - [X] T034 [US4] **RAM headroom gate** — measure the Dell's free RAM under a Jellyfin transcode + active download load; record in the runbook a go/defer decision for Plex per plan Complexity Tracking (defer to Phase 12 if it won't fit). Do not deploy Plex if the gate fails
 - [X] T035 [US4] Create `stacks/plex/compose.yaml` (Dell) — `/dev/dri` QuickSync, `plex-config` volume, `/srv/nfs/media` **RO**, `PLEX_CLAIM=${PLEX_CLAIM}` (first-run), Traefik labels; declare in `komodo/stacks.toml` (Dell)
 - [X] T036 [US4] Deploy `plex`; claim the server, add Movies/TV libraries on `/srv/nfs/media`, enable QuickSync HW transcode (Plex Pass)
-- [X] T037 [P] [US4] Create `stacks/jellystat/compose.yaml` (Dell) — `jellystat` + `jellystat-db` (Postgres, `jellystat-db` volume), Traefik labels; declare in `komodo/stacks.toml` (Dell)
-- [ ] T038 [US4] Deploy `jellystat`; connect it to Jellyfin (API key minted at wiring time); confirm stats populate
-- [ ] T039 [US4] Add Homepage entries and verify valid TLS for `plex` and `jellystat`
-- [ ] T040 [US4] Run `quickstart.md` Scenario 8 (same title plays from Jellyfin **and** Plex; one on-disk copy; stats visible); record (SC-008, FR-015/017)
+- [~] T037 [P] [US4] ~~Create `stacks/jellystat/compose.yaml`~~ — **DESCOPED** (Jellystat removed; stack dir + Komodo/Homepage/secret refs deleted 2026-07-20)
+- [~] T038 [US4] ~~Deploy `jellystat`; connect to Jellyfin; confirm stats~~ — **DESCOPED** (Plex stats handled by Tautulli in PLAN Phase 6)
+- [X] T039 [US4] Add Homepage entry and verify valid TLS for `plex` — *live: Homepage entry present + plex answers through Traefik with a valid cert (2026-07-20 audit)*
+- [ ] T040 [US4] Run `quickstart.md` Scenario 8 (same title plays from Jellyfin **and** Plex; one on-disk copy) — stats clause dropped with Jellystat; record (SC-008, FR-015/017)
 
 **Checkpoint**: dual-server library + stats — the full stack the operator scoped.
 
@@ -157,7 +164,7 @@
 
 - [ ] T041 Run `quickstart.md` Scenario 10 — confirm 100% of UIs load with valid TLS and appear on Homepage; record (SC-010, FR-019)
 - [ ] T042 Run `quickstart.md` Scenario 11 — on a clean re-run of `stacks/arr/configure/wire.yml`, confirm all inter-app connections are present from code with **no** manual clicks, the run is idempotent, and **Buildarr was not used**; record (SC-011, FR-023/023a/024)
-- [ ] T043 [P] Secret/state sanity — `git grep` confirms no secret values committed (only `${VAR}` refs + `.mise.toml.example` placeholders); confirm **no** app config lives under `/srv/nfs`; confirm the Mac holds **no** persistent media state (golden rule) (FR-018/020/021)
+- [X] T043 [P] Secret/state sanity — `git grep` confirms no secret values committed (only `${VAR}` refs + `.mise.toml.example` placeholders); confirm **no** app config lives under `/srv/nfs`; confirm the Mac holds **no** persistent media state (golden rule) (FR-018/020/021) — *live: only `env`/`lookup` refs; `/srv/nfs` = downloads/media/photos only; Mac runs only Periphery (2026-07-20 audit)*
 - [X] T044 [P] Add a **"Three configuration planes"** section to `docs/CONVENTIONS.md` (machine `provision/` · deployment Komodo · application `stacks/*/configure/`, post-deploy) and grow the ports/URL tables for the new stacks (spec FR-023a)
 - [ ] T045 Consolidate all `quickstart.md` evidence under `Verification evidence` in `docs/runbooks/phase5-media.md`, update this file's **Implementation status**, and mark the Phase 5 deliverable done in `PLAN.md` / `README.md` (matching how Phases 1–4 recorded completion)
 

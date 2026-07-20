@@ -44,15 +44,10 @@ services:
     ports:
       - "11011:11011"  # LAN-only; routed by Traefik file provider.
 
-  # --- Huntarr — hunts missing items + upgrades on a schedule (edge 18) ---------
-  huntarr:
-    image: ghcr.io/plexguide/huntarr:8.1.0
-    container_name: huntarr
-    restart: unless-stopped
-    environment:
-      TZ: America/Los_Angeles
-    ports:
-      - "9705:9705"    # LAN-only; routed by Traefik file provider.
+# Huntarr was DROPPED (2026-07-20): its pinned image `ghcr.io/plexguide/huntarr:8.1.0`
+# is no longer pullable (registry "denied"; the plexguide/Huntarr.io packages 404).
+# It was the optional missing/upgrade hunter — Radarr/Sonarr still search on add — so
+# it was removed rather than repinned. Re-add here + in traefik/homepage if wanted later.
 
 # No `volumes:` — the Mac holds no persistent state (golden rule).
 # No `networks:` — these publish LAN host ports on the Mac; there is no Traefik

@@ -51,11 +51,6 @@ configs:
             entryPoints: [websecure]
             service: cleanuparr
             tls: {}
-          huntarr:
-            rule: "Host(`huntarr.ragnaforge.xyz`)"
-            entryPoints: [websecure]
-            service: huntarr
-            tls: {}
         services:
           byparr:
             loadBalancer:
@@ -65,10 +60,6 @@ configs:
             loadBalancer:
               servers:
                 - url: "http://10.0.0.71:11011"
-          huntarr:
-            loadBalancer:
-              servers:
-                - url: "http://10.0.0.71:9705"
 
 services:
   traefik:
