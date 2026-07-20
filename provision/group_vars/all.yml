@@ -41,3 +41,16 @@ nfs_client_ip: 10.0.0.71
 # (research.md R4).
 nfs_export_options: "rw,sync,no_subtree_check"
 nfs_mount_options: "rw,noauto,x-systemd.automount,x-systemd.mount-timeout=10"
+
+# Tailscale --------------------------------------------------------------------
+
+# Whether this node accepts subnet routes advertised by other tailnet peers.
+# MUST stay false for every host provisioned here: both nodes are physically ON
+# the advertised LAN (the Dell advertises 10.0.0.0/24 as a subnet router). A node
+# that accepts the route for the subnet it already sits on will send its OWN LAN
+# traffic through the tunnel — reply packets egress tailscale0 instead of the
+# wire, the return path goes asymmetric, and all *inbound* LAN connectivity dies
+# (SSH/ping time out, Komodo reports the node NotOk). accept-routes is only for
+# REMOTE operator devices (phones/laptops off-LAN), which this inventory doesn't
+# manage. Override per-host only if a future node genuinely lives off-LAN.
+tailscale_accept_routes: false

@@ -44,3 +44,20 @@
   register: tailscale_up
   changed_when: tailscale_up.rc == 0
   no_log: true
+
+# Enforce accept-routes. Nodes here are physically ON the advertised LAN, so they
+# must NOT accept the subnet route for it — doing so black-holes their own inbound
+# LAN traffic (see the tailscale_accept_routes rationale in group_vars/all.yml).
+- name: Read current Tailscale accept-routes (RouteAll) preference
+  ansible.builtin.command: tailscale debug prefs
+  register: tailscale_prefs
+  changed_when: false
+
+- name: Enforce the Tailscale accept-routes preference
+  ansible.builtin.command: >-
+    tailscale set --accept-routes={{ tailscale_accept_routes | bool | string | lower }}
+  when: >-
+    ('"RouteAll": ' ~ (tailscale_accept_routes | bool | string | lower))
+    not in tailscale_prefs.stdout
+  register: tailscale_set_routes
+  changed_when: tailscale_set_routes.rc == 0

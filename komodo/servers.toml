@@ -15,6 +15,10 @@ tags = ["phase-2"]
 [server.config]
 address = "https://10.0.0.70:8120"
 enabled = true
+# Periphery runs in a container; Docker bind-mounts these host files into it, and
+# each shows up as a duplicate "disk" pointing at the same root filesystem. Ignore
+# them so disk stats report the real disk once, not summed N× (a phantom ~900 GB).
+ignore_mounts = ["/etc/resolv.conf", "/etc/hostname", "/etc/hosts"]
 
 [[server]]
 name = "ragnaforge-mac"
@@ -24,3 +28,5 @@ tags = ["phase-2"]
 [server.config]
 address = "https://10.0.0.71:8120"
 enabled = true
+# See the Dell note above — dedupe the container bind-mount "disks".
+ignore_mounts = ["/etc/resolv.conf", "/etc/hostname", "/etc/hosts"]
