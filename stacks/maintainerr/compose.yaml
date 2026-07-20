@@ -20,7 +20,7 @@
 
 services:
   maintainerr:
-    image: ghcr.io/jorenn92/maintainerr:3.18.0
+    image: ghcr.io/jorenn92/maintainerr:2.19.0
     container_name: maintainerr
     restart: unless-stopped
     environment:
