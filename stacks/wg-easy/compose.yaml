@@ -56,11 +56,15 @@ services:
     networks:
       - traefik
     labels:
-      # --- Traefik: expose the admin UI at vpn.ragnaforge.xyz. LAN/Tailscale only —
-      # :443 is never router-forwarded (FR-016). The VPN itself stays on the public
-      # 51820/udp above; this only routes the web admin (container port 51821). ---
+      # --- Traefik: expose the admin UI at wg.ragnaforge.xyz. LAN/Tailscale only —
+      # :443 is never router-forwarded (FR-016). The admin UI gets its OWN name
+      # (NOT vpn.ragnaforge.xyz): `vpn` is pinned to the home's PUBLIC IP by
+      # cloudflare-ddns for the WireGuard 51820/udp endpoint, so `vpn`:443 lands on
+      # the unforwarded public IP and can't reach the UI. `wg` follows the normal
+      # wildcard (Tailscale IP publicly / 10.0.0.70 via AdGuard) and works anywhere.
+      # This routes only the web admin (container port 51821). ---
       - "traefik.enable=true"
-      - "traefik.http.routers.wg-easy.rule=Host(`vpn.ragnaforge.xyz`)"
+      - "traefik.http.routers.wg-easy.rule=Host(`wg.ragnaforge.xyz`)"
       - "traefik.http.routers.wg-easy.entrypoints=websecure"
       - "traefik.http.routers.wg-easy.tls=true"
       - "traefik.http.services.wg-easy.loadbalancer.server.port=51821"

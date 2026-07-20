@@ -36,7 +36,7 @@ configs:
               description: Internal DNS + ad-blocking — LAN/Tailscale only
           - wg-easy:
               icon: wireguard.png
-              href: https://vpn.ragnaforge.xyz
+              href: https://wg.ragnaforge.xyz
               description: Family/friends VPN admin — LAN/Tailscale only
       - Apps:
           - whoami:
