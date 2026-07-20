@@ -16,7 +16,7 @@ a Seerr request and a hardlinked file in `/srv/nfs/media` lives here.
 | `sonarr` | TV PVR | `sonarr.ragnaforge.xyz` |
 | `bazarr` | subtitles | `bazarr.ragnaforge.xyz` |
 | `unpackerr` | extracts archived releases for the PVRs | — |
-| `configarr` | applies TRaSH quality profiles from `configarr/config.yml` | — (one-shot) |
+| `configarr` | applies TRaSH quality profiles (inline `configs:` in compose) | — (one-shot) |
 
 ## Egress model (the whole point)
 
@@ -75,12 +75,17 @@ unmaintained).
 
 ## Quality from code (Configarr)
 
-`configarr/config.yml` holds the TRaSH quality profiles and custom formats. The
+The TRaSH quality profiles and custom formats are shipped **inline** in a top-level
+`configs:` block in `compose.yaml` and materialised at `/app/config/config.yml`. The
 `configarr` service applies them to Radarr/Sonarr and exits; a second run is a no-op
-(SC-009). It reads its config from the git-tracked `configarr/` directory. If Komodo's
-git-clone deploy doesn't resolve the relative bind, run Configarr as a one-shot from
-the Dell working copy (`docker compose run --rm configarr`) — documented in the
-runbook.
+(SC-009). The config's `!env RADARR_API_KEY` / `!env SONARR_API_KEY` tags resolve from
+the service environment (keys forwarded from mise via the Periphery agent).
+
+Why inline and not a bind mount: Komodo Periphery runs in a container with
+`/etc/komodo` as a named volume, so a relative host bind (`./configarr:/app/config`)
+resolves to a host path the daemon can't find — Docker silently mounts an empty dir
+and Configarr dies with "Config file not found". Inline `configs:` (the same pattern
+`homepage`/`traefik` use) sidesteps this entirely.
 
 ## Image tags
 

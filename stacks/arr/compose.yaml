@@ -7,7 +7,7 @@
 # radarr / sonarr  (movie / TV PVRs; import as HARDLINKS into /srv/nfs/media)
 # bazarr  (subtitles for radarr/sonarr)
 # unpackerr  (extracts archived releases for the PVRs)
-# configarr  (applies TRaSH quality profiles/custom formats from code — see configarr/)
+# configarr  (applies TRaSH quality profiles/custom formats from code — inline config below)
 #
 # EGRESS MODEL: only qBittorrent egresses, and only via Proton. gluetun's default
 # killswitch means tunnel-down = NO egress (SC-002). qBittorrent's listen port
@@ -26,6 +26,59 @@
 #
 # IMAGE TAGS: pinned explicitly (no :latest) per Diun/Phase-10 intent. Bump
 # deliberately; verify against the registry before deploy.
+
+# CONFIGARR CONFIG: shipped INLINE via `configs:` content (materialised inside the
+# container), NOT a host bind mount. Komodo Periphery runs in a container with
+# /etc/komodo as a named volume, so a relative bind (`./configarr:/app/config`)
+# resolves to a host path the daemon can't find → Docker silently mounts an EMPTY
+# dir and configarr dies with "Config file not found". Inline `configs:` is the
+# house pattern here (see stacks/homepage + stacks/traefik) and sidesteps it.
+configs:
+  configarr-config:
+    content: |
+      # quality-from-code (research R5/R6; wiring edge 7). Configarr syncs
+      # TRaSH-Guides quality profiles + custom formats into Radarr and Sonarr from
+      # THIS block, idempotently (a second run reports no changes — SC-009). This is
+      # the ONLY source of truth for quality profiles; they are never hand-entered.
+      #
+      # The container reaches the PVRs on the `arr` network by service name and
+      # authenticates with the deterministic keys from mise via the `!env` tag
+      # (RADARR_API_KEY / SONARR_API_KEY, passed to this service's environment).
+      # Template IDs are version-sensitive to the TRaSH/Recyclarr guides — bump
+      # deliberately; verify at https://configarr.de and https://trash-guides.info.
+      trashGuideUrl: https://github.com/TRaSH-Guides/Guides
+      recyclarrConfigUrl: https://github.com/recyclarr/config-templates
+
+      radarr:
+        radarr-main:
+          base_url: http://radarr:7878
+          api_key: !env RADARR_API_KEY
+
+          quality_definition:
+            type: movie
+
+          # 1080p-first, transcode-friendly on the i3-10110U (QuickSync). Adjust to taste.
+          include:
+            - template: radarr-quality-definition-movie
+            - template: radarr-quality-profile-hd-bluray-web
+            - template: radarr-custom-formats-hd-bluray-web
+
+          custom_formats: []
+
+      sonarr:
+        sonarr-main:
+          base_url: http://sonarr:8989
+          api_key: !env SONARR_API_KEY
+
+          quality_definition:
+            type: series
+
+          include:
+            - template: sonarr-quality-definition-series
+            - template: sonarr-v4-quality-profile-web-1080p
+            - template: sonarr-v4-custom-formats-web-1080p
+
+          custom_formats: []
 
 services:
   # --- Proton egress + killswitch (the tunnel every torrent rides) -------------
@@ -221,9 +274,14 @@ services:
     restart: "no"
     environment:
       TZ: America/Los_Angeles
-    volumes:
-      # The config is git-tracked and read-only inside the container.
-      - ./configarr:/app/config:ro
+      # Resolve the config's `!env` tags — the deterministic keys forwarded from
+      # mise via the Periphery agent env (komodo/bootstrap/periphery.compose.yaml).
+      RADARR_API_KEY: ${RADARR_API_KEY}
+      SONARR_API_KEY: ${SONARR_API_KEY}
+    configs:
+      # Materialised from the top-level `configs:` block (NOT a host bind — see note).
+      - source: configarr-config
+        target: /app/config/config.yml
     networks:
       - arr
     depends_on:
