@@ -169,7 +169,12 @@ ssh ragnaforge-dell 'free -h; docker stats --no-stream'
   per the escape hatch; keep Jellyfin as the single server for now. Record the
   decision below either way.
 
-**Decision (fill in):** _RAM free under load = ___ → GO / DEFER, dated ___._
+**Decision (2026-07-20): GO.** Measured with edge + Komodo + arr + Jellyfin + Seerr
+running (idle, no active transcode): **4.9 GiB available** of 7.5 GiB (used 2.6 GiB;
+buff/cache 5.1 GiB reclaimable; swap unused). Plex idles ~200 MiB, ~0.5–1 GiB under
+transcode → comfortable headroom. Caveat: this is an idle reading; the binding limit
+for *concurrent* Plex+Jellyfin transcode is the i3-10110U iGPU, not RAM. Operator set
+Plex as the **primary** server (Jellyfin = backup), so Plex proceeds now, not deferred.
 
 ---
 

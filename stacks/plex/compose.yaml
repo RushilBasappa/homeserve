@@ -22,6 +22,14 @@ services:
     devices:
       # Intel iGPU → QuickSync HW transcode (shared with Jellyfin; research R1).
       - /dev/dri:/dev/dri
+    group_add:
+      # The LinuxServer Plex image runs as uid/gid 1000 (unlike the root Jellyfin
+      # image), so it needs the host's `render` + `video` groups to access
+      # /dev/dri/renderD128 + card0 for QuickSync. These GIDs are HOST-SPECIFIC —
+      # on ragnaforge-dell: render=992, video=44 (`getent group render|video`).
+      # A rebuild on a different host must re-check these.
+      - "992"
+      - "44"
     environment:
       # Non-secret constants; mirrored in komodo/variables.toml (MEDIA_PUID/PGID/TZ).
       PUID: "1000"
