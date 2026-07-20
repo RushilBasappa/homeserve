@@ -39,3 +39,9 @@ Apps then resolve at `home` / `whoami` / `komodo` / `adguard` / `vpn` `.ragnafor
 
 **Other house:** first edit IPs/hostnames/domain in `provision/inventory.yml`,
 `komodo/servers.toml`, `komodo/variables.toml`, and secrets in `.mise.toml`.
+
+**Gotchas when *updating* stacks (not fresh deploys):**
+- A new subdomain 404s right after deploy → the app just joined the `traefik`
+  network; `docker restart traefik` to make it re-scan.
+- Changed homepage's inline `configs:` content → a plain redeploy reuses the old
+  Docker config objects. Use Komodo **DestroyStack → DeployStack** to refresh.
