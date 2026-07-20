@@ -40,6 +40,9 @@
     - name: NFS server & export
       ansible.builtin.import_tasks: tasks/nfs-server.yml
 
+    - name: Shared media tree (setgid) under the export
+      ansible.builtin.import_tasks: tasks/storage-layout.yml
+
     - name: Free :53 for AdGuard (disable systemd-resolved stub listener)
       ansible.builtin.import_tasks: tasks/edge-dns.yml
 

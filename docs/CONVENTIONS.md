@@ -100,17 +100,37 @@ Two kinds of state, two homes — both on the Dell:
 | **Config / app state** (databases, settings, app config) | **Local named volume on the Dell** | Fast, backed up by Backrest. `<app>-config`, `<app>-pgdata`. |
 | **Shared media** (movies, TV, photos) | **NFS on the Dell** (`/srv/nfs`, mounted on the Mac) | One media namespace both nodes can read. |
 
+The shared-media namespace has a **fixed, materialized layout** (created by
+`provision/tasks/storage-layout.yml`, Phase 4; contract in
+`specs/005-storage/contracts/media-layout.md`). Phase 5 (ARR + Jellyfin) and
+Phase 6 (Immich) mount these exact paths:
+
+```text
+/srv/nfs/                       owner rushil:rushil (1000:1000), dir mode 2775 (setgid)
+├── media/movies/    Radarr, Jellyfin
+├── media/tv/        Sonarr, Jellyfin
+├── downloads/complete/    qBittorrent → Radarr/Sonarr import (hardlink source)
+├── downloads/incomplete/  qBittorrent in-progress
+└── photos/          Immich external-library / shared originals
+```
+
+`media/` and `downloads/` are under **one root on one filesystem**, so servarr
+imports are instant hardlinks/atomic renames, not cross-device copies. The setgid
+bit (`2775`) means every media container (run with `PUID=1000`/`PGID=1000`) creates
+files the others can read/write.
+
 Conventions:
 
 - Config volumes are **local to the Dell** — do not put config on NFS (latency,
-  locking) and never on the Mac.
+  locking) and never on the Mac. **Nothing config-related lives under `/srv/nfs`.**
 - Shared media lives under the NFS export so any node (and the ARR stack +
-  Jellyfin) sees the same `/media` layout.
+  Jellyfin) sees the same layout above.
 - A stateless stack on the Mac keeps **no** persistent local state; if it needs
   state, it belongs on the Dell (see the golden rule).
 
 Growth path when media outgrows the internal disk: **mergerfs + USB** on the
-Dell (documented in Phase 4) — the NFS export path stays the same.
+Dell — see [`docs/runbooks/phase4-storage.md`](runbooks/phase4-storage.md#mergerfs--usb-growth-path).
+The NFS export path (and every app mount) stays the same.
 
 ---
 

@@ -142,7 +142,7 @@ everything else drops into.
 - **Deliverable:** `https://home.ragnaforge.xyz` loads with valid TLS.
   **Depends on:** Phase 2.
 
-### Phase 4 — Storage
+### Phase 4 — Storage ✅
 **Objective:** one media/config namespace, backup-friendly.
 - Dell **NFS** server (`/srv/nfs`), mounted on the Mac.
 - Volume conventions: config volumes local to the host; shared media on NFS.

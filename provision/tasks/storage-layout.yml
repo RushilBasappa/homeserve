@@ -1,0 +1,35 @@
+# tasks/storage-layout.yml — materialize the shared media tree under the NFS export.
+#
+# Phase 1 (nfs-server.yml) created the export ROOT (/srv/nfs). This task creates the
+# concrete, hardlink-friendly contents Phase 5/6 mount: media/{movies,tv},
+# downloads/{complete,incomplete}, photos/ — the contract in
+# specs/005-storage/contracts/media-layout.md (research.md R2).
+#
+# Ownership model (research.md R3): the whole tree is owned by the shared admin
+# identity (1000:1000 = the `rushil` account) with dir mode 2775 — the leading `2`
+# is the SETGID bit, so files any media container (PUID/PGID 1000) creates inherit
+# the parent group and stay mutually readable/writable. That is the precondition for
+# cross-app hardlinks (qBittorrent download → Radarr import → Jellyfin read).
+#
+# Runs on the Dell ONLY (the server owns the real directories; the Mac sees them
+# through the mount) and is sequenced AFTER nfs-server.yml so the export root exists.
+#
+# We enumerate every directory — including the `media/` and `downloads/` parents —
+# rather than `recurse: true` on the export root, so setgid/ownership is applied to
+# each level WITHOUT re-chmodding /srv/nfs itself (owned 0775 by nfs-server.yml).
+---
+- name: Create the shared media tree with setgid ownership
+  ansible.builtin.file:
+    path: "{{ nfs_export_path }}/{{ item }}"
+    state: directory
+    owner: "{{ admin_user }}"
+    group: "{{ admin_user }}"
+    mode: "02775"
+  loop:
+    - media
+    - media/movies
+    - media/tv
+    - downloads
+    - downloads/complete
+    - downloads/incomplete
+    - photos

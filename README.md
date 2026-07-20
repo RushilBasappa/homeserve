@@ -15,6 +15,14 @@ plan and [`docs/CONVENTIONS.md`](./docs/CONVENTIONS.md) for how stacks are built
 
 ## Current status
 
+**Phase 4 — Storage — ✅ complete.** The `/srv/nfs` export now carries a
+materialized, hardlink-friendly media tree (`media/{movies,tv}`,
+`downloads/{complete,incomplete}`, `photos/`, owned `1000:1000` `setgid 2775`),
+provisioned idempotently by Ansible and verified consistent across both nodes —
+including on-demand automount and server-down boot resilience. The mergerfs + USB
+growth path is documented. See
+[`docs/runbooks/phase4-storage.md`](./docs/runbooks/phase4-storage.md).
+
 **Phase 3 — Edge, DNS & TLS — ✅ complete.**
 
 Every deployed app now has a friendly, **browser-trusted** `https://<name>.ragnaforge.xyz`
@@ -154,10 +162,27 @@ public scan shows only UDP 51820. Bring-up order, the preflight verdict, and
 family/friend onboarding (incl. Fire TV file import) are in
 [`docs/runbooks/phase3-edge.md`](./docs/runbooks/phase3-edge.md).
 
-### Phase 4 — Storage
+### Phase 4 — Storage ✅
 
-_Not started._ Dell NFS server + volume conventions; the mergerfs + USB growth
-path.
+**Materialized and verified on the Dell** (2026-07-19). The Phase-1 NFS export now
+has a concrete, hardlink-friendly media tree, proven consistent across both nodes:
+
+- **Standard tree** ([`provision/tasks/storage-layout.yml`](./provision/tasks/storage-layout.yml))
+  — `media/{movies,tv}`, `downloads/{complete,incomplete}`, `photos/` under
+  `/srv/nfs`, owned `1000:1000` with `setgid 2775` so any media container (PUID/PGID
+  1000) writes files the others can hardlink/read. Created idempotently by Ansible
+  (second pass `changed=0`), the exact paths Phase 5/6 mount
+  ([contract](./specs/005-storage/contracts/media-layout.md)).
+- **Verified cross-node** — write-on-Dell/read-and-append-on-Mac is one consistent
+  namespace; the Mac's automount activates on demand and does **not** wedge when the
+  server is down (recovers on next access). Evidence recorded in the runbook.
+- **Golden rule audited** — no stateful app data on the Mac (only the Komodo
+  Periphery agent's own state); config stays off NFS.
+- **Growth path documented** — mergerfs + USB pooling *under* `/srv/nfs`, export path
+  and every app mount unchanged.
+
+Full evidence and the growth procedure in
+[`docs/runbooks/phase4-storage.md`](./docs/runbooks/phase4-storage.md).
 
 ### Phase 5 — Media stack (ARR + Jellyfin)
 
