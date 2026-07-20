@@ -3,9 +3,64 @@
 # One memorable place listing every app with HTTPS links (FR-012, US5). Routed
 # like any other app via the canonical Traefik labels; reuses the wildcard cert.
 #
-# Config is GIT-DECLARED and bind-mounted from ./config so the front door is
-# reproducible from this repo (Komodo pulls the repo onto the Dell, so ./config
-# resolves inside the clone). See stacks/homepage/config/*.yaml.
+# Config is shipped INLINE via `configs:` content (materialised inside the
+# container at /app/config/*.yaml) — NOT a host bind mount, because Komodo deploys
+# from a git clone where a relative `./config` mount doesn't resolve (Docker would
+# create an empty dir). This keeps the front door git-declared and Komodo-safe.
+# The former stacks/homepage/config/*.yaml files are superseded by these blocks.
+
+configs:
+  homepage-settings:
+    content: |
+      title: Ragnaforge
+      headerStyle: clean
+      theme: dark
+      color: slate
+      layout:
+        Infrastructure:
+          style: row
+          columns: 3
+        Apps:
+          style: row
+          columns: 4
+  homepage-services:
+    content: |
+      - Infrastructure:
+          - Komodo:
+              icon: komodo.png
+              href: http://10.0.0.70:9120
+              description: Fleet orchestration (Core) — LAN/Tailscale only
+          - AdGuard Home:
+              icon: adguard-home.png
+              href: http://10.0.0.70:3000
+              description: Internal DNS + ad-blocking — LAN/Tailscale only
+          - wg-easy:
+              icon: wireguard.png
+              href: http://10.0.0.70:51821
+              description: Family/friends VPN admin — LAN/Tailscale only
+      - Apps:
+          - whoami:
+              icon: traefik.png
+              href: https://whoami.ragnaforge.xyz
+              description: Phase-3 edge proof (traefik/whoami)
+  homepage-widgets:
+    content: |
+      - resources:
+          cpu: true
+          memory: true
+          disk: /
+      - search:
+          provider: duckduckgo
+          target: _blank
+  homepage-bookmarks:
+    content: |
+      - Project:
+          - Repo:
+              - abbr: GH
+                href: https://github.com/RushilBasappa/homeserve
+          - Homepage docs:
+              - abbr: HP
+                href: https://gethomepage.dev/
 
 services:
   homepage:
@@ -19,12 +74,15 @@ services:
       # Homepage rejects requests whose Host header isn't allow-listed; it is
       # served at home.ragnaforge.xyz behind Traefik.
       HOMEPAGE_ALLOWED_HOSTS: home.ragnaforge.xyz
-    volumes:
-      # Git-declared config (settings / services / bookmarks / widgets).
-      - ./config:/app/config
-      # Read-only Docker socket ONLY if label-based service discovery is enabled
-      # in config/docker.yaml; harmless to mount, discovery stays opt-in.
-      - /var/run/docker.sock:/var/run/docker.sock:ro
+    configs:
+      - source: homepage-settings
+        target: /app/config/settings.yaml
+      - source: homepage-services
+        target: /app/config/services.yaml
+      - source: homepage-widgets
+        target: /app/config/widgets.yaml
+      - source: homepage-bookmarks
+        target: /app/config/bookmarks.yaml
     labels:
       # --- canonical Traefik routing labels (contract edge-routing) ---
       - "traefik.enable=true"
