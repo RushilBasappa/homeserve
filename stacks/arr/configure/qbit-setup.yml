@@ -1,0 +1,127 @@
+---
+# stacks/arr/configure/qbit-setup.yml — PLANE 3, co-located with the arr stack, run
+# POST-DEPLOY, idempotently. Configures qBittorrent's OWN settings (not inter-app
+# wiring — that's wire.yml): set the WebUI password to the shared media login, enable
+# localhost-auth bypass (so gluetun's native port-sync POST works), and set the
+# hardlink-friendly save paths under /data.
+#
+# CREDS: MEDIA_ADMIN_PASSWORD (shared media login) from the workstation .mise.toml.
+# qBit's WebUI username stays `admin` (qBit default).
+#
+# FIRST-RUN: LinuxServer qBit logs a temporary password once. This play tries the
+# target password first; if that fails, it reads the temp password off the container
+# and sets the real one. NOTE: `docker logs` shows the whole history — if a password
+# was already set, the temp line is stale; restart qbittorrent for a fresh one.
+#
+# RUN:  cd stacks/arr/configure && mise exec -- ansible-playbook qbit-setup.yml
+
+- name: qBittorrent first-run config (plane 3)
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    qbit_url: "https://qbittorrent.ragnaforge.xyz"
+    qbit_user: admin
+    qbit_pass: "{{ lookup('env', 'MEDIA_ADMIN_PASSWORD') }}"
+    save_path: /data/downloads/complete
+    temp_path: /data/downloads/incomplete
+
+  tasks:
+    - name: Require the media admin password
+      ansible.builtin.assert:
+        that: qbit_pass | length >= 8
+        fail_msg: "Set MEDIA_ADMIN_PASSWORD (>=8 chars) in .mise.toml."
+
+    - name: Try to log in with the target password
+      ansible.builtin.uri:
+        url: "{{ qbit_url }}/api/v2/auth/login"
+        method: POST
+        headers:
+          Referer: "{{ qbit_url }}"
+        body_format: form-urlencoded
+        body:
+          username: "{{ qbit_user }}"
+          password: "{{ qbit_pass }}"
+        return_content: true
+      register: login_target
+      no_log: true
+
+    # First run: the WebUI password isn't the target yet → set it from the temp one.
+    - name: Set the WebUI password from the first-run temp password
+      when: "'Ok.' not in (login_target.content | default(''))"
+      block:
+        - name: Read the current temp password from the container log
+          ansible.builtin.command: >-
+            ssh ragnaforge-dell
+            "docker logs qbittorrent 2>&1 | grep -i 'temporary password' | tail -1 | sed 's/.*session: //'"
+          register: tmp_pw
+          changed_when: false
+
+        - name: Log in with the temp password
+          ansible.builtin.uri:
+            url: "{{ qbit_url }}/api/v2/auth/login"
+            method: POST
+            headers:
+              Referer: "{{ qbit_url }}"
+            body_format: form-urlencoded
+            body:
+              username: admin
+              password: "{{ tmp_pw.stdout | trim }}"
+            return_content: true
+          register: login_temp
+          no_log: true
+
+        - name: Fail clearly if the temp login did not work
+          ansible.builtin.assert:
+            that: "'Ok.' in (login_temp.content | default(''))"
+            fail_msg: >-
+              qBit temp login failed. `docker logs` may show a STALE first-boot temp
+              password; restart the qbittorrent container for a fresh one, then re-run.
+
+        - name: Set the WebUI password to the shared media login
+          ansible.builtin.uri:
+            url: "{{ qbit_url }}/api/v2/app/setPreferences"
+            method: POST
+            headers:
+              Referer: "{{ qbit_url }}"
+              Cookie: "{{ login_temp.cookies_string }}"
+            body_format: form-urlencoded
+            body:
+              json: '{"web_ui_password": "{{ qbit_pass }}"}'
+          no_log: true
+
+    # From here the target password is valid (either it already was, or we just set
+    # it). Log in fresh and apply the localhost bypass + save paths (idempotent).
+    - name: Log in with the target password
+      ansible.builtin.uri:
+        url: "{{ qbit_url }}/api/v2/auth/login"
+        method: POST
+        headers:
+          Referer: "{{ qbit_url }}"
+        body_format: form-urlencoded
+        body:
+          username: "{{ qbit_user }}"
+          password: "{{ qbit_pass }}"
+        return_content: true
+      register: login_final
+      no_log: true
+
+    - name: Enable localhost-auth bypass + set save paths (idempotent)
+      ansible.builtin.uri:
+        url: "{{ qbit_url }}/api/v2/app/setPreferences"
+        method: POST
+        headers:
+          Referer: "{{ qbit_url }}"
+          Cookie: "{{ login_final.cookies_string }}"
+        body_format: form-urlencoded
+        body:
+          json: >-
+            {"bypass_local_auth": true, "save_path": "{{ save_path }}",
+             "temp_path": "{{ temp_path }}", "temp_path_enabled": true}
+
+    - name: Summary
+      ansible.builtin.debug:
+        msg: >-
+          qBittorrent configured: WebUI login admin/<media password>, localhost-auth
+          bypass ON (gluetun port-sync), save paths under /data. Re-runs are no-ops.

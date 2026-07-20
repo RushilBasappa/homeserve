@@ -67,7 +67,7 @@
 - [X] T007 Declare the `arr` stack in `komodo/stacks.toml` (`server = "ragnaforge-dell"`, `repo`/`branch`/`file_paths = ["stacks/arr/compose.yaml"]`, `webhook_enabled = false`), matching the existing edge-stack entries
 - [X] T008 Deploy `arr` via Komodo; confirm every container is healthy, Gluetun's tunnel is up (Proton exit IP), and qBittorrent's WebUI is reachable through Gluetun at `qbittorrent.ragnaforge.xyz`
 - [X] T009 Create `stacks/arr/configure/wire.yml` — an **idempotent** Ansible `uri` play implementing `contracts/wiring.md` edges 1–4, 8–9, 11–12 (qBittorrent → Radarr/Sonarr download client; Radarr/Sonarr → Prowlarr applications; Bazarr → Radarr/Sonarr), GET-then-POST so a re-run is a no-op; fail loudly on API rejection
-- [ ] T010 Run `stacks/arr/configure/wire.yml` **after** the arr apps are healthy (keys pinned); confirm a second run reports **no changes** (idempotent — SC-011 precondition)
+- [X] T010 Run `stacks/arr/configure/wire.yml` **after** the arr apps are healthy (keys pinned); confirm a second run reports **no changes** (idempotent — SC-011 precondition)
 - [ ] T011 Add at least one torrent indexer in Prowlarr and confirm Prowlarr **native app-sync** propagated it into Radarr and Sonarr (edge 6 — no play step); record in the runbook
 - [ ] T012 Add Homepage entries and verify valid TLS for `qbittorrent`, `prowlarr`, `radarr`, `sonarr`, `bazarr` at `https://<app>.ragnaforge.xyz`
 
@@ -84,7 +84,7 @@
 - [X] T013 [P] [US1] Create `stacks/jellyfin/compose.yaml` (Dell) — `/dev/dri` QuickSync passthrough, `jellyfin-config` volume, `/srv/nfs/media` **RO**, `PUID/PGID/TZ`, Traefik labels; declare it in `komodo/stacks.toml` (Dell)
 - [X] T014 [US1] Deploy `jellyfin`; complete first-run (admin), add **Movies** (`/srv/nfs/media/movies`) and **TV** (`/srv/nfs/media/tv`) libraries; confirm HW transcode uses QuickSync
 - [X] T015 [P] [US1] Create `stacks/seerr/compose.yaml` (Dell) — `seerr-config` volume, Traefik labels; declare it in `komodo/stacks.toml` (Dell)
-- [ ] T016 [US1] Deploy `seerr`; connect Seerr → Jellyfin (backend) and Seerr → Radarr/Sonarr (`contracts/wiring.md` edges 8–10) using the pinned keys / admin login (extend `wire.yml` or Seerr setup); confirm a Seerr request reaches Radarr/Sonarr
+- [X] T016 [US1] Deploy `seerr`; connect Seerr → Jellyfin (backend) and Seerr → Radarr/Sonarr (`contracts/wiring.md` edges 8–10) using the pinned keys / admin login (extend `wire.yml` or Seerr setup); confirm a Seerr request reaches Radarr/Sonarr
 - [ ] T017 [US1] Add Homepage entries and verify valid TLS for `jellyfin` and `seerr`
 - [ ] T018 [US1] Run `quickstart.md` Scenario 1 (request one movie → download → import → play in Jellyfin); record evidence in the runbook (SC-001, FR-001/002/005)
 - [ ] T019 [US1] Run `quickstart.md` Scenario 2 (stop `gluetun`; confirm qBittorrent egresses **nothing** over the home line and the observed IP was only Proton; restart → auto-resume); record (SC-002, FR-003)

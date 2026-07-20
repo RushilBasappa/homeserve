@@ -24,6 +24,13 @@
     # Plex as reached from INSIDE the Seerr container (traefik network).
     plex_internal_ip: plex
     plex_internal_port: 32400
+    # Radarr/Sonarr reached from Seerr container-to-container (traefik network).
+    radarr_api_key: "{{ lookup('env', 'RADARR_API_KEY') }}"
+    sonarr_api_key: "{{ lookup('env', 'SONARR_API_KEY') }}"
+    radarr_url: "https://radarr.ragnaforge.xyz"
+    sonarr_url: "https://sonarr.ragnaforge.xyz"
+    movies_root: /data/media/movies
+    tv_root: /data/media/tv
 
   tasks:
     - name: Require the Plex owner token
@@ -73,6 +80,105 @@
         headers:
           Cookie: "{{ seerr_auth.cookies_string }}"
         status_code: 200
+
+    # --- Fulfilment: connect Seerr → Radarr / Sonarr (idempotent add) ---
+    - name: List Seerr's configured Radarr servers
+      ansible.builtin.uri:
+        url: "{{ seerr_url }}/api/v1/settings/radarr"
+        method: GET
+        headers:
+          Cookie: "{{ seerr_auth.cookies_string }}"
+        status_code: 200
+        return_content: true
+      register: seerr_radarr
+
+    - name: Query Radarr for a quality profile
+      ansible.builtin.uri:
+        url: "{{ radarr_url }}/api/v3/qualityprofile"
+        method: GET
+        headers:
+          X-Api-Key: "{{ radarr_api_key }}"
+        status_code: 200
+        return_content: true
+      register: radarr_qp
+      when: (seerr_radarr.json | length) == 0
+
+    - name: Add Radarr to Seerr (when none configured)
+      ansible.builtin.uri:
+        url: "{{ seerr_url }}/api/v1/settings/radarr"
+        method: POST
+        headers:
+          Cookie: "{{ seerr_auth.cookies_string }}"
+        body_format: json
+        body:
+          name: Radarr
+          hostname: radarr
+          port: 7878
+          apiKey: "{{ radarr_api_key }}"
+          useSsl: false
+          baseUrl: ""
+          activeProfileId: "{{ radarr_qp.json[0].id }}"
+          activeProfileName: "{{ radarr_qp.json[0].name }}"
+          activeDirectory: "{{ movies_root }}"
+          is4k: false
+          minimumAvailability: released
+          isDefault: true
+          syncEnabled: true
+          preventSearch: false
+          tagRequests: false
+          tags: []
+        status_code: [200, 201]
+      when: (seerr_radarr.json | length) == 0
+
+    - name: List Seerr's configured Sonarr servers
+      ansible.builtin.uri:
+        url: "{{ seerr_url }}/api/v1/settings/sonarr"
+        method: GET
+        headers:
+          Cookie: "{{ seerr_auth.cookies_string }}"
+        status_code: 200
+        return_content: true
+      register: seerr_sonarr
+
+    - name: Query Sonarr for a quality profile
+      ansible.builtin.uri:
+        url: "{{ sonarr_url }}/api/v3/qualityprofile"
+        method: GET
+        headers:
+          X-Api-Key: "{{ sonarr_api_key }}"
+        status_code: 200
+        return_content: true
+      register: sonarr_qp
+      when: (seerr_sonarr.json | length) == 0
+
+    - name: Add Sonarr to Seerr (when none configured)
+      ansible.builtin.uri:
+        url: "{{ seerr_url }}/api/v1/settings/sonarr"
+        method: POST
+        headers:
+          Cookie: "{{ seerr_auth.cookies_string }}"
+        body_format: json
+        body:
+          name: Sonarr
+          hostname: sonarr
+          port: 8989
+          apiKey: "{{ sonarr_api_key }}"
+          useSsl: false
+          baseUrl: ""
+          activeProfileId: "{{ sonarr_qp.json[0].id }}"
+          activeProfileName: "{{ sonarr_qp.json[0].name }}"
+          activeDirectory: "{{ tv_root }}"
+          activeAnimeProfileId: "{{ sonarr_qp.json[0].id }}"
+          activeAnimeDirectory: "{{ tv_root }}"
+          enableSeasonFolders: true
+          is4k: false
+          isDefault: true
+          syncEnabled: true
+          preventSearch: false
+          tagRequests: false
+          tags: []
+        status_code: [200, 201]
+      when: (seerr_sonarr.json | length) == 0
 
     - name: Confirm session + read main settings (incl. API key)
       ansible.builtin.uri:

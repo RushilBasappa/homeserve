@@ -38,7 +38,9 @@
     radarr_api_key: "{{ lookup('env', 'RADARR_API_KEY') }}"
     sonarr_api_key: "{{ lookup('env', 'SONARR_API_KEY') }}"
     prowlarr_api_key: "{{ lookup('env', 'PROWLARR_API_KEY') }}"
-    qbit_password: "{{ lookup('env', 'QBIT_WEBUI_PASSWORD') }}"
+    # qBit WebUI login is admin / the shared media password (set by qbit-setup.yml).
+    qbit_username: admin
+    qbit_password: "{{ lookup('env', 'MEDIA_ADMIN_PASSWORD') }}"
 
     # From the arr containers' point of view, qBittorrent is reachable inside
     # gluetun's netns at gluetun:8080; Prowlarr reaches the PVRs by service name.
@@ -49,6 +51,10 @@
     prowlarr_internal: "http://prowlarr:9696"
 
     seerr_enabled: false
+    # Bazarr (subtitles) has no env-settable API key and needs its own first-run
+    # before it can be wired. Off the request→play critical path — enable once Bazarr
+    # is set up: -e bazarr_enabled=true (the play will read its key at that point).
+    bazarr_enabled: false
 
   tasks:
     # --- Preflight: fail loudly if a required key is missing -------------------
@@ -149,12 +155,48 @@
         label: "{{ item.name }}"
 
     # ========================================================================
+    # Root folders on the PVRs — where imports land (and what Seerr hands off to).
+    # Radarr → /data/media/movies, Sonarr → /data/media/tv (inside the container's
+    # /srv/nfs -> /data mount; same filesystem as downloads → hardlink imports).
+    # ========================================================================
+    - name: Read existing root folders (Radarr / Sonarr)
+      ansible.builtin.uri:
+        url: "{{ item.url }}/api/v3/rootfolder"
+        method: GET
+        headers:
+          X-Api-Key: "{{ item.key }}"
+        status_code: 200
+        return_content: true
+      register: root_folders
+      loop:
+        - { name: radarr, url: "{{ radarr_url }}", key: "{{ radarr_api_key }}", path: /data/media/movies }
+        - { name: sonarr, url: "{{ sonarr_url }}", key: "{{ sonarr_api_key }}", path: /data/media/tv }
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Add the root folder where missing (idempotent)
+      ansible.builtin.uri:
+        url: "{{ item.item.url }}/api/v3/rootfolder"
+        method: POST
+        headers:
+          X-Api-Key: "{{ item.item.key }}"
+        body_format: json
+        body:
+          path: "{{ item.item.path }}"
+        status_code: [201, 200]
+      when: "item.item.path not in (item.json | map(attribute='path') | list)"
+      loop: "{{ root_folders.results }}"
+      loop_control:
+        label: "{{ item.item.name }} -> {{ item.item.path }}"
+
+    # ========================================================================
     # Edge 11/12 — Bazarr → Radarr / Sonarr (subtitle source)
     # Bazarr's REST schema differs by version; we drive it via its API using the
     # PVR keys. If your Bazarr build rejects the body, the play FAILS here (visible)
     # — update the payload for that version rather than wiring by hand.
     # ========================================================================
     - name: Point Bazarr at Radarr and Sonarr (system settings)
+      when: bazarr_enabled | bool
       ansible.builtin.uri:
         url: "{{ bazarr_url }}/api/system/settings"
         method: POST
