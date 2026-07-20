@@ -23,6 +23,8 @@
     # /srv/nfs/media -> /media:ro).
     movies_path: "/media/movies"
     tv_path: "/media/tv"
+    # Server display name (default is the random container hostname).
+    plex_friendly_name: "ragnaserve"
 
   tasks:
     - name: Require the Plex token
@@ -64,6 +66,14 @@
           Accept: application/json
         status_code: [200, 201]
       when: "'TV' not in section_titles"
+
+    - name: Set the server display name (idempotent)
+      ansible.builtin.uri:
+        url: "{{ plex_url }}/:/prefs?FriendlyName={{ plex_friendly_name | urlencode }}"
+        method: PUT
+        headers:
+          X-Plex-Token: "{{ plex_token }}"
+        status_code: [200]
 
     - name: Enable Intel QuickSync hardware transcoding (upsert; idempotent)
       ansible.builtin.uri:
