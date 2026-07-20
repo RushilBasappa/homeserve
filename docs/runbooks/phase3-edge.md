@@ -164,8 +164,8 @@ resolution. Inconclusive ⇒ NO-GO (never a false GO).
 | Date run | 2026-07-19 |
 | Public IP | `76.102.108.83` |
 | CGNAT? | **No** — routable public Xfinity address (not in `100.64.0.0/10`) |
-| External UDP 51820 | pending — needs the xFi port-forward + an external probe |
-| Verdict | **GO (direct path)** — the CGNAT gate passed; a home port-forward is feasible |
+| External UDP 51820 | **reachable** — inbound WireGuard handshake from an external cellular IP confirmed the xFi forward works |
+| Verdict | **GO (direct path)** — all three checks pass; family VPN live end-to-end |
 | Chosen path | **direct port-forward** (no VPS relay needed) |
 
 The script printed a conservative NO-GO only because checks 2–3 weren't set up yet
