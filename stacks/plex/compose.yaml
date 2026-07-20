@@ -16,7 +16,7 @@
 
 services:
   plex:
-    image: lscr.io/linuxserver/plex:1.41.6
+    image: lscr.io/linuxserver/plex:1.43.3
     container_name: plex
     restart: unless-stopped
     devices:
