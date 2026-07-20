@@ -20,7 +20,10 @@
 
 services:
   maintainerr:
-    image: ghcr.io/jorenn92/maintainerr:2.19.0
+    # Registry moved: 3.x ships on Docker Hub `maintainerr/maintainerr`, NOT the old
+    # GHCR `jorenn92/maintainerr` (stale at 2.19.x). 3.x is a major upgrade over 2.x —
+    # it migrates the maintainerr-config DB on first start (volume persists).
+    image: maintainerr/maintainerr:3.18.0
     container_name: maintainerr
     restart: unless-stopped
     environment:
