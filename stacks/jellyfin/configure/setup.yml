@@ -31,6 +31,9 @@
     # /srv/nfs/media -> /media:ro).
     movies_path: "/media/movies"
     tv_path: "/media/tv"
+    # Traefik's Docker network subnet — trusted as a reverse proxy so Jellyfin
+    # honours the forwarded Host/X-Forwarded-* headers (matches stacks/traefik).
+    traefik_subnet: "172.23.0.0/16"
     # Header used only for the initial username/password authentication.
     emby_auth_header: 'MediaBrowser Client="ansible-setup", Device="ansible", DeviceId="ansible-setup", Version="1.0.0"'
 
@@ -119,7 +122,39 @@
       ansible.builtin.set_fact:
         jf_token: "{{ jf_auth.json.AccessToken }}"
 
-    # --- 3. Libraries (idempotent: skip if the name already exists) --------
+    # --- 3. Networking: advertise the EXTERNAL url, not the container IP -----
+    # Without this Jellyfin publishes its Docker-internal address (e.g.
+    # http://172.23.0.13:8096) as the server URL. Clients store that unreachable
+    # address as their "selected server" and fail to reconnect from anywhere
+    # ("We're unable to connect to the selected server right now"). Deriving the
+    # published URL from the request Host means clients get whatever hostname they
+    # reached Traefik on (the domain, LAN, or WireGuard), and trusting the Traefik
+    # subnet lets Jellyfin honour the forwarded headers. Idempotent upsert.
+    - name: Read current network configuration
+      ansible.builtin.uri:
+        url: "{{ jf_url }}/System/Configuration/network"
+        method: GET
+        headers:
+          X-Emby-Token: "{{ jf_token }}"
+        status_code: 200
+        return_content: true
+      register: jf_net
+
+    - name: Publish server URL by request host + trust the Traefik proxy
+      ansible.builtin.uri:
+        url: "{{ jf_url }}/System/Configuration/network"
+        method: POST
+        headers:
+          X-Emby-Token: "{{ jf_token }}"
+        body_format: json
+        body: >-
+          {{ jf_net.json | combine({
+            'EnablePublishedServerUriByRequest': true,
+            'KnownProxies': (jf_net.json.KnownProxies | default([]) | union([traefik_subnet]))
+          }) }}
+        status_code: [200, 204]
+
+    # --- 4. Libraries (idempotent: skip if the name already exists) --------
     - name: List existing libraries
       ansible.builtin.uri:
         url: "{{ jf_url }}/Library/VirtualFolders"
@@ -158,7 +193,7 @@
         status_code: [200, 204]
       when: "'TV' not in (jf_libs.json | map(attribute='Name') | list)"
 
-    # --- 4. QuickSync (QSV) hardware transcoding ----------------------------
+    # --- 5. QuickSync (QSV) hardware transcoding ----------------------------
     - name: Read current encoding options
       ansible.builtin.uri:
         url: "{{ jf_url }}/System/Configuration/encoding"
