@@ -165,9 +165,17 @@ everything else drops into.
 - **Deliverable:** request → download (via VPN) → library → play.
   **Depends on:** Phases 3, 4.
 
-### Phase 6 — Media & system stats
+### Phase 6 — Media & system stats ✅
 **Objective:** see the audience and the load — who's watching what, and whether
 the box can take it. Dashboards/visibility only; push alerting lands in Phase 9.
+> **✅ complete (2026-07-21)** — code-complete and deployed live: Tautulli shows
+> now-playing + direct-play/transcode + persistent history (Plex read-only), and
+> Beszel gives one fleet view with **both** nodes green (Dell + Mac, full Linux
+> host metrics + per-container). Both TLS-fronted and on Homepage (native Tautulli
+> now-playing widget). Metric agents are one generic, node-agnostic compose,
+> deployed per node. Notes: Beszel systems are added in the UI for now (declarative
+> `config.yml`/config-sync deferred — Komodo can't bind the file); thresholds are
+> the operator's to set (no push channel — Phase-9 boundary).
 - **Tautulli** (Plex watch stats) — per-user history, now-playing, per-stream
   bandwidth, and the **direct-play vs transcode** breakdown (the number that
   tells you when Plex is cooking the i3's iGPU/CPU). Talks to Plex read-only via
