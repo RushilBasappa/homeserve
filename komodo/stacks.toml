@@ -198,4 +198,70 @@ webhook_enabled = false
 
 # media-helpers (byparr/cleanuparr/huntarr) REMOVED 2026-07-20 — unused; the whole
 # stateless Mac stack was deleted (no self-maintenance workers for now).
+
+# ============================================================================
+# Phase 6 — Media & system stats (research R1/R2; contract stack-inventory).
+# Tautulli + the Beszel HUB are STATEFUL → ragnaforge-dell. Metric agents are the ONE
+# generic, node-agnostic stacks/beszel/agent.compose.yaml, deployed once PER NODE as a
+# `beszel-agent-<node>` stack (same file, different `server`). Adding a node = one more
+# [[stack]] block below + one line in stacks/beszel/config.yml — never a new file.
+# All manual (webhook_enabled=false). Bring-up order in docs/runbooks/phase6-stats.md:
+# tautulli → beszel (hub) → beszel-agent-dell → beszel-agent-mac (node awake) → homepage.
+# ============================================================================
+
+[[stack]]
+name = "tautulli"
+description = "Phase-6 — Plex watch stats (now-playing + direct-play/transcode + history); read-only."
+tags = ["phase-6", "stats"]
+
+[stack.config]
+server = "ragnaforge-dell"
+repo = "RushilBasappa/homeserve"
+git_provider = "github.com"
+branch = "main"
+file_paths = ["stacks/tautulli/compose.yaml"]
+webhook_enabled = false
+
+[[stack]]
+name = "beszel"
+description = "Phase-6 — fleet metrics hub (one view: CPU/RAM/disk/net/temps + per-container)."
+tags = ["phase-6", "stats"]
+
+[stack.config]
+server = "ragnaforge-dell"
+repo = "RushilBasappa/homeserve"
+git_provider = "github.com"
+branch = "main"
+file_paths = ["stacks/beszel/compose.yaml"]
+webhook_enabled = false
+
+# --- Metric agents: one per node, all from the SAME generic agent.compose.yaml ---
+
+[[stack]]
+name = "beszel-agent-dell"
+description = "Phase-6 — Beszel agent on ragnaforge-dell (generic agent stack)."
+tags = ["phase-6", "stats"]
+
+[stack.config]
+server = "ragnaforge-dell"
+repo = "RushilBasappa/homeserve"
+git_provider = "github.com"
+branch = "main"
+file_paths = ["stacks/beszel/agent.compose.yaml"]
+webhook_enabled = false
+
+# ragnaforge-mac = Apple hardware running Debian Linux (node NAME, not an OS). Deploy
+# when the node is awake (Periphery Ok — see homeserve-ragnaforge-mac-node). Same
+# generic agent file as the Dell — only `server` differs.
+[[stack]]
+name = "beszel-agent-mac"
+description = "Phase-6 — Beszel agent on ragnaforge-mac (generic agent stack; polled at 10.0.0.71:45876)."
+tags = ["phase-6", "stats"]
+
+[stack.config]
+server = "ragnaforge-mac"
+repo = "RushilBasappa/homeserve"
+git_provider = "github.com"
+branch = "main"
+file_paths = ["stacks/beszel/agent.compose.yaml"]
 webhook_enabled = false

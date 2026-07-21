@@ -57,8 +57,12 @@ and the Homepage entry. One name, everywhere.
 | 51820 | UDP | wg-easy | **the one** public port — router-forwarded → Dell |
 | 51821 | TCP | wg-easy | LAN/Tailscale admin — never router-forwarded |
 | 6881 | TCP/UDP | arr (via gluetun) | **outbound only via Proton**; inbound = Proton's forwarded port. **Not** router-forwarded — no home-IP exposure |
+| 45876 | TCP | beszel-agent-mac | **LAN only** — the Dell hub polls the Mac agent at `10.0.0.71:45876`; not router-forwarded, no public exposure |
 
-_(Live as of Phase 3; Phase-5 rows added. HTTP apps on the **Dell** publish **no**
+_(Live as of Phase 3; Phase-5 rows added. Phase-6: the Tautulli (`8181`) and Beszel
+hub (`8090`) UIs on the **Dell** publish **no** host ports — reached only via Traefik at
+`tautulli`/`beszel.ragnaforge.xyz`. The Beszel **Mac** agent has no UI (nothing to route)
+but binds `45876` on the host (Linux `network_mode: host`) so the Dell hub can poll it on the LAN. HTTP apps on the **Dell** publish **no**
 host ports — reached only via Traefik labels. The Mac helpers publish LAN ports
 because Traefik (Dell-only, label-based) can't see Mac containers; they are fronted
 at `<app>.ragnaforge.xyz` by Traefik's **file** provider → `10.0.0.71:<port>` (see

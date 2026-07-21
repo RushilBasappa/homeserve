@@ -117,3 +117,33 @@ PLEX_CLAIM = "changeme-plex-claim-token"
 # TVs/phones (>=8 chars).
 MEDIA_ADMIN_USER     = "changeme-media-admin-username"
 MEDIA_ADMIN_PASSWORD = "changeme-media-admin-password"
+
+# --- Phase 6: Media & system stats (Tautulli + Beszel) (research R4, R7) ---
+#
+# Plex SERVER token — the long-lived token of your claimed Plex server. REUSED here
+# by Tautulli's read-only monitoring; it is ALSO already consumed by Maintainerr's
+# configure play (stacks/maintainerr/configure/setup.yml). It was previously only in
+# the live .mise.toml — codified here as a placeholder. Get it from any Plex API
+# response header (X-Plex-Token) or https://support.plex.tv/articles/204059436.
+# Consumed by the WORKSTATION configure plays (localhost), NOT a container env, so it
+# is NOT forwarded to Periphery (same model as MEDIA_ADMIN_*).
+PLEX_TOKEN = "changeme-plex-server-token"
+
+# Tautulli API key — DETERMINISTIC so the Homepage now-playing widget and the
+# assertion play both read a known value. Generate: openssl rand -hex 16. Set this as
+# Tautulli's API key on first run (Settings → Web Interface → API). Forwarded to
+# Periphery (the Homepage container reads it as HOMEPAGE_VAR_TAUTULLI_KEY).
+TAUTULLI_API_KEY = "changeme-tautulli-api-key-32hex"
+
+# Beszel hub PUBLIC key — the ed25519 key the hub shows in its "Add System" dialog.
+# NOT known until the hub's first run: deploy the hub, copy its public key here, then
+# `make sync-secrets` before deploying the agents. Every agent trusts ONLY this hub
+# (KEY= env). Not strictly secret (it's a public key), but forwarded via Periphery env
+# because Komodo does not interpolate [[VAR]] into git-pulled compose.
+BESZEL_KEY = "changeme-beszel-hub-ssh-ed25519-public-key"
+
+# Beszel hub admin — ONE-TIME superuser for the hub UI (SC-009 permits one-time
+# credential provisioning). Used to create the first user in the Beszel UI/CLI; not a
+# container env, so NOT forwarded to Periphery.
+BESZEL_ADMIN_EMAIL    = "changeme-beszel-admin-email"
+BESZEL_ADMIN_PASSWORD = "changeme-beszel-admin-password"

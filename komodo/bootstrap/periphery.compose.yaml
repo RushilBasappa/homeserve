@@ -62,6 +62,12 @@ services:
       QBIT_WEBUI_PASSWORD: ${QBIT_WEBUI_PASSWORD}
       # P2 (plex) — forwarded now so Periphery isn't recreated again.
       PLEX_CLAIM: ${PLEX_CLAIM}
+      # --- Phase 6 (stats): only values a Periphery-run CONTAINER references as
+      # ${VAR}. TAUTULLI_API_KEY → the Homepage container's now-playing widget;
+      # BESZEL_KEY → the Beszel agents' KEY= (both nodes). PLEX_TOKEN and
+      # BESZEL_ADMIN_* are workstation/one-time only and are intentionally NOT here.
+      TAUTULLI_API_KEY: ${TAUTULLI_API_KEY}
+      BESZEL_KEY: ${BESZEL_KEY}
     volumes:
       # Drive the node's Docker engine.
       - /var/run/docker.sock:/var/run/docker.sock

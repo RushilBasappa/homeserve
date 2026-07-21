@@ -1,0 +1,22 @@
+# stacks/beszel/config.yml — DECLARATIVE fleet systems, imported by the Beszel hub so
+# the Dell + Mac nodes are reproduced from code, not hand-added in the UI (FR-011,
+# SC-009). Mounted read-only into the hub at /beszel_data/config.yml (research R3).
+#
+# Node IPs are inlined LITERALS (10.0.0.70 = ragnaforge-dell, 10.0.0.71 = ragnaforge-mac)
+# because Komodo does not interpolate [[VAR]] into git-pulled compose. Port 45876 is the
+# agents' metrics port. The hub POLLS these; the Mac (frequently asleep) shows down/stale
+# when unreachable and auto-recovers (FR-010, SC-006).
+#
+# NOTE (validate at deploy): the exact key of this file on the pinned Beszel version may
+# differ (`systems:` shown here). If import proves unreliable, fall back to a co-located
+# idempotent plane-3 play against the PocketBase API (research R3) — a visible failure,
+# never silent drift. The hub's admin USER is provisioned once (BESZEL_ADMIN_*), not
+# declared here.
+
+systems:
+  - name: ragnaforge-dell
+    host: 10.0.0.70
+    port: 45876
+  - name: ragnaforge-mac
+    host: 10.0.0.71
+    port: 45876

@@ -44,6 +44,10 @@ configs:
               icon: wireguard.png
               href: https://wg.ragnaforge.xyz
               description: Family/friends VPN admin — LAN/Tailscale only
+          - Beszel:
+              icon: beszel.png
+              href: https://beszel.ragnaforge.xyz
+              description: Fleet metrics — CPU/RAM/disk/temps + per-container (dashboards only)
       - Apps:
           - whoami:
               icon: traefik.png
@@ -66,6 +70,16 @@ configs:
               icon: maintainerr.png
               href: https://maintainerr.ragnaforge.xyz
               description: Manual six-surface cascade delete
+          - Tautulli:
+              icon: tautulli.png
+              href: https://tautulli.ragnaforge.xyz
+              description: Plex watch stats (now-playing + transcode + history)
+              # Native now-playing widget — shows current streams on the front door
+              # (SC-008). Key injected via env (HOMEPAGE_VAR_TAUTULLI_KEY), not committed.
+              widget:
+                type: tautulli
+                url: http://tautulli:8181
+                key: "{{HOMEPAGE_VAR_TAUTULLI_KEY}}"
       - Acquisition:
           - qBittorrent:
               icon: qbittorrent.png
@@ -118,6 +132,10 @@ services:
       # Homepage rejects requests whose Host header isn't allow-listed; it is
       # served at home.ragnaforge.xyz behind Traefik.
       HOMEPAGE_ALLOWED_HOSTS: home.ragnaforge.xyz
+      # Phase 6: the Tautulli now-playing widget's API key. Forwarded from mise via the
+      # Periphery env (see komodo/bootstrap/periphery.compose.yaml) and referenced in
+      # services.yaml as {{HOMEPAGE_VAR_TAUTULLI_KEY}} — never hard-committed.
+      HOMEPAGE_VAR_TAUTULLI_KEY: ${TAUTULLI_API_KEY}
     configs:
       - source: homepage-settings
         target: /app/config/settings.yaml

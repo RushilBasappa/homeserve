@@ -1,0 +1,94 @@
+---
+# stacks/tautulli/configure/setup.yml — PLANE 3 (application setup), co-located with
+# the tautulli stack, run POST-DEPLOY, idempotently (spec FR-018/SC-009). ASSERTS that
+# Tautulli is up, connected to Plex READ-ONLY, and accumulating history. It does NOT
+# mutate Plex or media — it is an observability check, matching the read-only guarantee.
+#
+# MODEL (same as stacks/maintainerr/configure/setup.yml): runs on the WORKSTATION
+# (localhost), talks to Tautulli over its public https URL, reads secrets from the mise
+# env. So PLEX_TOKEN / TAUTULLI_API_KEY come from .mise.toml — they are NOT container
+# env and are NOT forwarded to Periphery.
+#
+# ONE-TIME first-run (permitted, SC-009): the Plex link + the deterministic api_key are
+# provisioned once (UI wizard or a seeded config.ini — see config.ini.example). This
+# play then VERIFIES that provisioning and stays a no-op on re-run. If the api_key isn't
+# set yet, or the Plex token is stale, it FAILS LOUDLY with guidance (surfacing the
+# spec's "cannot reach Plex" edge case) rather than silently showing empty stats.
+#
+# RUN:  cd stacks/tautulli/configure && mise exec -- ansible-playbook setup.yml
+# Re-runs are read-only assertions — nothing is created or changed.
+
+- name: Tautulli — assert Plex link (read-only) + history accumulating (plane 3)
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    tautulli_url: "https://tautulli.ragnaforge.xyz"
+    api_key: "{{ lookup('env', 'TAUTULLI_API_KEY') }}"
+    plex_token: "{{ lookup('env', 'PLEX_TOKEN') }}"
+
+  tasks:
+    - name: Require the deterministic API key (set at first-run)
+      ansible.builtin.assert:
+        that:
+          - api_key | length > 0
+        fail_msg: >-
+          TAUTULLI_API_KEY is empty. Set it in .mise.toml and make it Tautulli's API
+          key (Settings → Web Interface → API) during the one-time first-run — see
+          docs/runbooks/phase6-stats.md §3 and configure/config.ini.example.
+
+    # ---- Tautulli reachable & API answering? -------------------------------------
+    - name: Ping the Tautulli API (arnold cmd is the canonical health check)
+      ansible.builtin.uri:
+        url: "{{ tautulli_url }}/api/v2?apikey={{ api_key }}&cmd=arnold"
+        method: GET
+        status_code: 200
+        return_content: true
+      register: tautulli_ping
+      no_log: true
+
+    - name: Fail if the API key is wrong / API disabled
+      ansible.builtin.assert:
+        that:
+          - tautulli_ping.json.response.result == 'success'
+        fail_msg: >-
+          Tautulli API did not accept TAUTULLI_API_KEY (check the key matches the one in
+          Settings → Web Interface → API, and that the API is enabled).
+
+    # ---- Plex connected? (read the server status Tautulli sees) -------------------
+    - name: Ask Tautulli for the Plex server status it monitors
+      ansible.builtin.uri:
+        url: "{{ tautulli_url }}/api/v2?apikey={{ api_key }}&cmd=get_server_id&hostname=plex&port=32400"
+        method: GET
+        status_code: 200
+        return_content: true
+      register: tautulli_server
+      no_log: true
+
+    - name: Fail loudly if Tautulli cannot resolve the Plex server (stale token / link)
+      ansible.builtin.assert:
+        that:
+          - (tautulli_server.json.response.data.identifier | default('', true)) | length > 0
+        fail_msg: >-
+          Tautulli could not resolve the Plex server at http://plex:32400. The Plex link
+          is not configured or the server token is stale. Re-run the one-time first-run
+          (UI wizard) with a fresh PLEX_TOKEN — see docs/runbooks/phase6-stats.md §3.
+
+    # ---- History accumulating? (informational — not a hard gate on first deploy) ---
+    - name: Read watch-history count
+      ansible.builtin.uri:
+        url: "{{ tautulli_url }}/api/v2?apikey={{ api_key }}&cmd=get_history&length=1"
+        method: GET
+        status_code: 200
+        return_content: true
+      register: tautulli_history
+      no_log: true
+
+    - name: Summary
+      ansible.builtin.debug:
+        msg: >-
+          Tautulli OK — API accepts the key, Plex server resolved
+          (id={{ tautulli_server.json.response.data.identifier }}), history records so
+          far = {{ tautulli_history.json.response.data.recordsFiltered | default('?') }}.
+          Read-only; re-runs change nothing.

@@ -1,0 +1,61 @@
+# beszel — the fleet metrics HUB (research R2; US2). Dell-only (stateful).
+#
+# Hub ONLY. Every node's agent — including the Dell's own — is the generic
+# agent.compose.yaml, deployed as a per-node `beszel-agent-<node>` Komodo stack. That
+# keeps the agent node-agnostic (one file, N nodes) and this stack single-purpose.
+#
+# The hub serves the web UI and stores metric history in an embedded PocketBase/SQLite
+# DB under /beszel_data (Dell named volume — golden rule, persists redeploy → FR-011).
+#
+# ONE FLEET VIEW: the hub POLLS each agent at <node-ip>:45876 (Dell 10.0.0.70, Mac
+# 10.0.0.71, and any future node — all listed in config.yml). Because the hub
+# initiates, a sleeping/off node simply appears DOWN/STALE and recovers automatically
+# when it returns (FR-010, SC-006) — no special handling.
+#
+# TRUST: every agent runs with KEY=${BESZEL_KEY} (this hub's public key) so it accepts
+# ONLY this hub. BESZEL_KEY is only known AFTER the hub's first run — deploy the hub,
+# copy its public key into .mise.toml, make sync-secrets, then deploy the agents (see
+# docs/runbooks/phase6-stats.md §4).
+#
+# SYSTEMS: declared in git (config.yml) and imported by the hub — no manual "Add
+# System" (FR-011, SC-009). Adding a node = one line in config.yml + one agent stack.
+#
+# NO PUSH (spec FR-014, SC-007): configure thresholds in the UI but wire NO
+# notification channel — breaches are visible indicators only. Phase 9 adds ntfy.
+#
+# IMAGE TAG: pinned (no :latest). Confirm/bump at deploy:
+# https://github.com/henrygd/beszel/releases
+
+configs:
+  beszel-systems:
+    # Declarative fleet — imported by the hub on start (research R3). Inlined so it is
+    # git-tracked and Komodo-safe (no host bind mount).
+    file: ./config.yml
+
+services:
+  beszel:
+    image: henrygd/beszel:0.9.1
+    container_name: beszel
+    restart: unless-stopped
+    volumes:
+      - beszel-data:/beszel_data
+    configs:
+      - source: beszel-systems
+        target: /beszel_data/config.yml
+    networks:
+      - traefik
+    labels:
+      # --- canonical Traefik routing labels; the hub UI listens on 8090 ---
+      - "traefik.enable=true"
+      - "traefik.http.routers.beszel.rule=Host(`beszel.ragnaforge.xyz`)"
+      - "traefik.http.routers.beszel.entrypoints=websecure"
+      - "traefik.http.routers.beszel.tls=true"
+      - "traefik.http.services.beszel.loadbalancer.server.port=8090"
+
+volumes:
+  # Local named volume on the Dell (golden rule: hub DB + registered agents → the Dell).
+  beszel-data:
+
+networks:
+  traefik:
+    external: true

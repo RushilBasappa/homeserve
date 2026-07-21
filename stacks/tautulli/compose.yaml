@@ -1,0 +1,54 @@
+# tautulli — Plex watch stats (research R1; US1). Dell-only (stateful).
+#
+# Now-playing sessions with per-stream user/title/device/bandwidth and the
+# DIRECT-PLAY vs TRANSCODE breakdown (the number that tells you when Plex is cooking
+# the i3's iGPU/CPU), plus per-user history in a local SQLite DB.
+#
+# READ-ONLY (spec FR-003, SC-002): Tautulli only OBSERVES Plex via the server token —
+# it never writes to, deletes from, or mutates the Plex library, metadata, or media.
+# It mounts NO media (distinct from the Phase-5 deletion tool).
+#
+# STATE: tautulli-config is a local named volume on the Dell (golden rule: SQLite
+# history DB → the Dell). Survives restart/redeploy (FR-004, SC-003). History
+# retention is bounded in the app config (FR-005) — see configure/config.ini.example.
+#
+# PLEX LINK: configured at first-run against the Plex server token (PLEX_TOKEN), over
+# the shared `traefik` network at http://plex:32400. The link is provisioned once
+# (SC-009 permits one-time credential provisioning) and then ASSERTED idempotently by
+# stacks/tautulli/configure/setup.yml. Komodo does not interpolate [[VAR]] into
+# git-pulled compose and Tautulli reads its token from config.ini (not env), so the
+# token is NOT referenced here — it is applied by the first-run/configure step.
+#
+# IMAGE TAG: pinned (no :latest) per Diun/Phase-10 intent. Confirm/bump the current
+# stable tag at deploy: https://github.com/Tautulli/Tautulli/releases
+
+services:
+  tautulli:
+    image: ghcr.io/tautulli/tautulli:v2.15.1
+    container_name: tautulli
+    restart: unless-stopped
+    environment:
+      # Non-secret constants; mirror the media PUID/PGID/TZ (Phase-5 house style).
+      PUID: "1000"
+      PGID: "1000"
+      TZ: America/Los_Angeles
+    volumes:
+      - tautulli-config:/config
+    networks:
+      - traefik
+    labels:
+      # --- canonical Traefik routing labels; Tautulli listens on 8181 ---
+      - "traefik.enable=true"
+      - "traefik.http.routers.tautulli.rule=Host(`tautulli.ragnaforge.xyz`)"
+      - "traefik.http.routers.tautulli.entrypoints=websecure"
+      - "traefik.http.routers.tautulli.tls=true"
+      - "traefik.http.services.tautulli.loadbalancer.server.port=8181"
+
+volumes:
+  # Local named volume on the Dell (golden rule: watch-history DB → the Dell).
+  tautulli-config:
+
+networks:
+  # Shared with Plex so Tautulli reaches it container-to-container at http://plex:32400.
+  traefik:
+    external: true

@@ -1,0 +1,41 @@
+# beszel-agent — the GENERIC, node-agnostic Beszel agent (research R2; US2).
+#
+# ONE file for EVERY fleet node. It carries NO node identity — the agent reports its
+# own hostname, and KEY / host-networking / docker.sock are identical on every host. To
+# monitor another node you do NOT copy this file: you add ONE `[[stack]]` block in
+# komodo/stacks.toml (name `beszel-agent-<node>`, a different `server`, the SAME
+# `file_paths = ["stacks/beszel/agent.compose.yaml"]`) and one line in the hub's
+# config.yml. Adding nodes never adds files — this is the portability goal in practice.
+#
+# WHERE IT RUNS: any Docker host in the fleet (currently ragnaforge-dell and
+# ragnaforge-mac — both Debian Linux; "mac" is a node NAME, not an OS). Stateless: NO
+# volume, NO web UI, so NO Traefik route. The hub POLLS each agent at <node-ip>:45876
+# (listed in config.yml); a node that is asleep/off shows down/stale and auto-recovers
+# on return (FR-010, SC-006).
+#
+# TRUST: KEY=${BESZEL_KEY} (the hub's public key, forwarded via each node's Periphery
+# env — make sync-secrets covers every node). An agent accepts only this hub.
+#
+# METRIC COVERAGE: host networking + the shared kernel give real CPU/RAM/network +
+# per-container stats. Root-disk % and TEMPERATURES need the host fs/sensors passed in
+# (a container sees its own fs and a limited /sys) — add the mounts/env the pinned
+# Beszel version documents (host-fs mount + EXTRA_FILESYSTEMS, hwmon) at deploy if you
+# want per-mount disk and temps.
+#
+# IMAGE TAG: pinned (no :latest). Match the hub's version. Listen-port env is
+# version-sensitive (LISTEN on newer Beszel, PORT on older) — confirm at deploy.
+
+services:
+  beszel-agent:
+    image: henrygd/beszel-agent:0.9.1
+    container_name: beszel-agent
+    restart: unless-stopped
+    # Linux host networking: real interfaces/metrics, and the agent binds 45876 on the
+    # host so the hub reaches it at <this-node-ip>:45876.
+    network_mode: host
+    environment:
+      LISTEN: "45876"
+      KEY: ${BESZEL_KEY}
+    volumes:
+      # Read-only: per-container CPU/RAM for this node's containers.
+      - /var/run/docker.sock:/var/run/docker.sock:ro

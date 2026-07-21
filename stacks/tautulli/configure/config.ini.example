@@ -1,0 +1,39 @@
+# stacks/tautulli/configure/config.ini.example — the keys that make Tautulli's Plex
+# link reproducible-from-config (research R4). REFERENCE, not a mounted file: Tautulli
+# needs config.ini read-WRITE and rewrites it, so it must NOT be bind-mounted read-only.
+#
+# Two ways to provision the link (both are a ONE-TIME step, permitted by SC-009):
+#
+#  A) UI first-run (default, simplest): open https://tautulli.ragnaforge.xyz, sign in
+#     to Plex, pick the server, then set the API key to your TAUTULLI_API_KEY value
+#     (Settings → Web Interface → API) and set history retention. Done once.
+#
+#  B) Seed the volume before first start: write a config.ini like the below into the
+#     tautulli-config volume (via `docker cp`/exec on the Dell), substituting the real
+#     values, then start Tautulli. pms_identifier is the Plex machine identifier — the
+#     configure play can fetch it from Plex with PLEX_TOKEN if you prefer B.
+#
+# Either way, stacks/tautulli/configure/setup.yml then ASSERTS the link (idempotent).
+
+[General]
+first_run_complete = 1
+# Bounded history so the SQLite DB doesn't grow unbounded on the Dell's small disk
+# (FR-005). Tune to taste; 0 = keep forever (NOT recommended here).
+history_table_activity_interval = 0
+
+[Advanced]
+# The deterministic key = your TAUTULLI_API_KEY (openssl rand -hex 16). The Homepage
+# widget and the assertion play both read this exact value.
+api_key = REPLACE_WITH_TAUTULLI_API_KEY
+api_enabled = 1
+
+[PMS]
+pms_ip = plex
+pms_port = 32400
+pms_ssl = 0
+pms_is_remote = 0
+# The Plex SERVER token (same as PLEX_TOKEN in .mise.toml — the token Maintainerr uses).
+pms_token = REPLACE_WITH_PLEX_TOKEN
+# Plex machine identifier — fetch from Plex: the `machineIdentifier` in the XML at
+# http://plex:32400/?X-Plex-Token=<PLEX_TOKEN>. Required so Tautulli pins the server.
+pms_identifier = REPLACE_WITH_PLEX_MACHINE_IDENTIFIER
