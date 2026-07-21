@@ -1,0 +1,50 @@
+# actual — self-hosted, local-first budgeting server (research R2; US2). Dell-only (stateful).
+#
+# PLAIN HTTP BEHIND TRAEFIK: ACTUAL_HTTPS_* are intentionally UNSET, so Actual serves plain
+# HTTP on :5006 and the Phase-3 edge terminates TLS. No double-TLS.
+#
+# NO CONTAINER SECRET: the server login password is set IN-APP on first run and stored in
+# server-files/account.sqlite — nothing to source from mise.
+#
+# STATE: actual-data is a local named volume on the Dell holding server-files/ (account.sqlite
+# — passwords/sessions/metadata) and user-files/ (the budget files). Survives redeploy (FR-007).
+# Existing budget preserved by restoring /data, or via in-app .zip Import → Actual (FR-006).
+#
+# LAN/VPN-ONLY (FR-015): Traefik at actual.ragnaforge.xyz; NO host ports, NO router forward.
+#
+# IMAGE TAG: pinned (no :latest). Note the actualbudget/actual-server REPO was archived (dev
+# moved into the actualbudget/actual monorepo) but the IMAGE name is unchanged. Verify/bump:
+# https://github.com/actualbudget/actual/releases
+
+services:
+  actual:
+    image: actualbudget/actual-server:26.7.0-alpine
+    container_name: actual
+    restart: unless-stopped
+    volumes:
+      - actual-data:/data
+    networks:
+      - traefik
+    healthcheck:
+      # No official /health endpoint — a root 200 is the practical liveness check (research R2).
+      # The image is Node-based, so `node -e` is guaranteed present.
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:5006',r=>process.exit(r.statusCode<500?0:1)).on('error',()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    labels:
+      # --- canonical Traefik routing labels; Actual listens on 5006 ---
+      - "traefik.enable=true"
+      - "traefik.http.routers.actual.rule=Host(`actual.ragnaforge.xyz`)"
+      - "traefik.http.routers.actual.entrypoints=websecure"
+      - "traefik.http.routers.actual.tls=true"
+      - "traefik.http.services.actual.loadbalancer.server.port=5006"
+
+volumes:
+  # Local named volume on the Dell (golden rule: budget data → the Dell).
+  actual-data:
+
+networks:
+  # Shared external proxy network — reached only via Traefik (no host ports).
+  traefik:
+    external: true

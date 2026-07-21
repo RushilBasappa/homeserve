@@ -193,10 +193,21 @@ the box can take it. Dashboards/visibility only; push alerting lands in Phase 9.
 - **Deliverable:** open one page and see current streams + per-node load.
   **Depends on:** Phases 3, 5.
 
-### Phase 7 — Apps
+### Phase 7a — Apps: finance & secrets
+**Objective:** the personal-data apps first (finances + passwords).
+- **Actual Budget** (budgeting), **Vaultwarden** (passwords), **Sure** (net-worth /
+  wealth tracking — community fork of Maybe Finance, AGPLv3).
+  - _Actual + Sure run **side by side on purpose** — trial both budgeting tools,
+    then keep the winner and retire the other._
+- Each: Compose stack + Traefik labels + Homepage entry + config volume on Dell.
+  - Actual & Vaultwarden are single-container; **Sure** needs Postgres + Redis
+    alongside the Rails app.
+- **Deliverable:** all three at `https://<name>.ragnaforge.xyz`.
+  **Depends on:** Phase 3.
+
+### Phase 7b — Apps: media, home & automation
 **Objective:** the rest of the lab.
-- **Immich** (photos), **Home Assistant**, **Actual Budget**, **Vaultwarden**
-  (passwords), **n8n** (automation).
+- **Immich** (photos), **Home Assistant**, **n8n** (automation).
 - Each: Compose stack + Traefik labels + Homepage entry + config volume on Dell.
 - **Deliverable:** all apps at `https://<name>.ragnaforge.xyz`.
   **Depends on:** Phase 3.
@@ -211,7 +222,7 @@ the box can take it. Dashboards/visibility only; push alerting lands in Phase 9.
   the WireGuard app (no QR — no camera).
 - Optional **nftables** rule fencing friend clients to media (Jellyfin) only.
 - **Deliverable:** a remote device joins from a fresh `.conf` and reaches
-  `https://jellyfin.ragnaforge.xyz`. **Depends on:** Phases 3, 7.
+  `https://jellyfin.ragnaforge.xyz`. **Depends on:** Phases 3, 7a.
 
 ### Phase 9 — Alerting (up/down + push)
 **Objective:** know when a disk fills or an app dies — on your phone.
@@ -225,9 +236,9 @@ the box can take it. Dashboards/visibility only; push alerting lands in Phase 9.
 ### Phase 10 — Backups
 **Objective:** protect the irreplaceable (photos, passwords, finances, configs).
 - **Backrest** (Restic GUI); local repo now, offsite (Backblaze B2) as a one-line add.
-- Pre-backup **DB dumps** for Immich (Postgres) and Vaultwarden.
+- Pre-backup **DB dumps** for Immich (Postgres), Sure (Postgres) and Vaultwarden.
 - Schedules + retention; documented **restore** procedure.
-- **Deliverable:** a verified restore of one app's config. **Depends on:** Phase 7.
+- **Deliverable:** a verified restore of one app's config. **Depends on:** Phase 7a.
 
 ### Phase 11 — Auto-update & maintenance
 **Objective:** stay current without surprise breakage.

@@ -1,0 +1,147 @@
+# sure — net-worth / wealth tracking (research R3; US3). The community fork of Maybe Finance
+# (we-promise/sure, AGPLv3; NOT affiliated with Maybe Finance Inc.). Dell-only (stateful).
+# The HEAVIEST Phase-7a stack and the natural retire-candidate if the Actual-vs-Sure trial
+# favours the far-lighter Actual — the isolated stacks make that a clean one-stack removal.
+#
+# TOPOLOGY (FR-009): a Rails app that inherently needs Postgres + Redis + a Sidekiq worker.
+#   web    — Rails/Puma on :3000 (the routed UI); entrypoint runs `rails db:prepare` on boot
+#            → SELF-MIGRATES, no manual step (FR-010, SC-004).
+#   worker — same image, `bundle exec sidekiq` (background jobs; relies on web having migrated).
+#   db     — postgres:16 (sure-pgdata; the durable state).
+#   redis  — redis:7-alpine (Sidekiq queue only; sure-redis optional to persist).
+# web + worker wait on HEALTHY db + redis (depends_on: service_healthy).
+#
+# TLS-BEHIND-PROXY: RAILS_ASSUME_SSL=true (Traefik terminates TLS); RAILS_FORCE_SSL left false.
+# LAN/VPN-ONLY (FR-015): Traefik on `web` at sure.ragnaforge.xyz; db/redis are internal-only
+# (network `sure`), NO host ports, NO router forward.
+#
+# SECRETS (from mise → Periphery → ${VAR}): SURE_SECRET_KEY_BASE (openssl rand -hex 64),
+# SURE_POSTGRES_PASSWORD (openssl rand -hex 32). Non-secret config is inlined (Komodo does not
+# interpolate [[VAR]] into git-pulled compose).
+#
+# ONBOARDING_STATE=open lets you create the first account; set it to `closed` and redeploy
+# afterwards (the finance-side analogue of Vaultwarden's signup lockdown).
+#
+# dns: [8.8.8.8, 1.1.1.1] on web/worker avoids an IPv6 resolution hang on the free
+# yahoo_finance market-data sync (research R3). Optional integrations (OpenAI, SMTP, OIDC, S3)
+# are all OFF by default — the trial works with no external keys.
+#
+# IMAGE TAG — ROLLING-TAG EXCEPTION (seerr-style): Sure publishes only a rolling `:stable` on
+# GHCR (semver releases exist but matching image tags are unconfirmed). Pin the digest for
+# reproducibility once deployed: `ghcr.io/we-promise/sure:stable@sha256:<digest>`. Diun
+# (Phase 10) watches it. Packages: https://github.com/we-promise/sure/pkgs/container/sure
+
+# Shared config for the two app services (web + worker) — same image + env + deps.
+x-sure-app: &sure-app
+  image: ghcr.io/we-promise/sure:stable
+  restart: unless-stopped
+  environment: &sure-env
+    SECRET_KEY_BASE: ${SURE_SECRET_KEY_BASE}
+    SELF_HOSTED: "true"
+    # TLS terminated at Traefik — assume SSL upstream, do NOT force a redirect loop.
+    RAILS_ASSUME_SSL: "true"
+    RAILS_FORCE_SSL: "false"
+    APP_DOMAIN: sure.ragnaforge.xyz
+    DB_HOST: db
+    DB_PORT: "5432"
+    POSTGRES_DB: sure
+    POSTGRES_USER: sure
+    POSTGRES_PASSWORD: ${SURE_POSTGRES_PASSWORD}
+    REDIS_URL: redis://redis:6379/1
+    # `open` for the one-time first account, then flip to `closed` and redeploy.
+    ONBOARDING_STATE: open
+  dns:
+    - 8.8.8.8
+    - 1.1.1.1
+  depends_on:
+    db:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+  networks:
+    - sure
+
+services:
+  # --- Rails web (the routed UI; self-migrates on boot) ------------------------
+  web:
+    <<: *sure-app
+    container_name: sure-web
+    command: ["./bin/rails", "server"]
+    volumes:
+      # ActiveStorage uploads — shared with the worker.
+      - sure-storage:/rails/storage
+    networks:
+      # `sure` to reach db/redis; `traefik` so ONLY web is routed.
+      - sure
+      - traefik
+    healthcheck:
+      # Rails default health endpoint (/up). Ruby + net/http (stdlib) is guaranteed in the image;
+      # wget/curl may not be, so use Ruby. start_period covers boot + db:prepare.
+      test: ["CMD", "ruby", "-rnet/http", "-e", "exit(Net::HTTP.get_response(URI('http://127.0.0.1:3000/up')).is_a?(Net::HTTPSuccess) ? 0 : 1)"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
+    labels:
+      # --- canonical Traefik routing labels; only `web` is routed; Puma on 3000 ---
+      - "traefik.enable=true"
+      - "traefik.http.routers.sure.rule=Host(`sure.ragnaforge.xyz`)"
+      - "traefik.http.routers.sure.entrypoints=websecure"
+      - "traefik.http.routers.sure.tls=true"
+      - "traefik.http.services.sure.loadbalancer.server.port=3000"
+
+  # --- Sidekiq worker (background jobs; no route) ------------------------------
+  worker:
+    <<: *sure-app
+    container_name: sure-worker
+    command: ["bundle", "exec", "sidekiq"]
+    volumes:
+      - sure-storage:/rails/storage
+    # No Traefik labels — internal only.
+
+  # --- PostgreSQL (the durable state) ------------------------------------------
+  db:
+    image: postgres:16
+    container_name: sure-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: sure
+      POSTGRES_USER: sure
+      POSTGRES_PASSWORD: ${SURE_POSTGRES_PASSWORD}
+    volumes:
+      - sure-pgdata:/var/lib/postgresql/data
+    networks:
+      - sure
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sure -d sure"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # --- Redis (Sidekiq queue) ---------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: sure-redis
+    restart: unless-stopped
+    volumes:
+      - sure-redis:/data
+    networks:
+      - sure
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  # All Dell-local named volumes (golden rule). Nothing on /srv/nfs or the Mac.
+  sure-pgdata:
+  sure-storage:
+  sure-redis:
+
+networks:
+  # Internal — db/redis reachable only by web+worker; never published.
+  sure:
+  # Shared external proxy network — only `web` attaches for its route.
+  traefik:
+    external: true

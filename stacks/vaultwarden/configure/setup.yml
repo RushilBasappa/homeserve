@@ -1,0 +1,66 @@
+---
+# stacks/vaultwarden/configure/setup.yml — PLANE 3 (application setup), co-located with the
+# vaultwarden stack, run POST-DEPLOY, idempotently (spec FR-018/SC-008). It ASSERTS the server
+# is live and reports its lockdown posture. It is READ-ONLY — it never creates a user, never
+# writes to the vault, never touches /data.
+#
+# MODEL (same as stacks/tautulli/configure/setup.yml): runs on the WORKSTATION (localhost),
+# talks to Vaultwarden over its public https URL. No secrets are needed for the assert.
+#
+# SCOPE — HONEST REFINEMENT (implement): a FULLY non-mutating automated signup-closed check is
+# not reliable (a POST to /identity/accounts/register would CREATE a user if signups were
+# unexpectedly open — the very failure we test for). So this play asserts what is safely
+# assertable — liveness (/alive) — and reports admin reachability; the actual SC-002 drills
+# (a browser register attempt is refused; /admin demands the Argon2 token) are the operator's,
+# recorded in docs/runbooks/phase7a-finance-secrets.md. Re-runs change nothing.
+#
+# RUN:  cd stacks/vaultwarden/configure && mise exec -- ansible-playbook setup.yml
+
+- name: Vaultwarden — assert live + report lockdown posture (plane 3, read-only)
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    vaultwarden_url: "https://vaultwarden.ragnaforge.xyz"
+
+  tasks:
+    # ---- Server live? (/alive returns the current datetime) ----------------------
+    - name: Ping the Vaultwarden liveness endpoint (/alive)
+      ansible.builtin.uri:
+        url: "{{ vaultwarden_url }}/alive"
+        method: GET
+        status_code: 200
+        return_content: false
+      register: vw_alive
+
+    - name: Fail loudly if Vaultwarden is not reachable over TLS
+      ansible.builtin.assert:
+        that:
+          - vw_alive.status == 200
+        fail_msg: >-
+          Vaultwarden did not answer GET /alive at {{ vaultwarden_url }} with 200. Confirm the
+          stack is deployed, the Traefik route is up, and the wildcard cert is valid — see
+          docs/runbooks/phase7a-finance-secrets.md.
+
+    # ---- Admin surface present? (informational — not a hard gate) ----------------
+    # /admin is expected to return a page that DEMANDS the Argon2 token (never open access).
+    # We only record reachability here; the token-gating drill (SC-002) is manual.
+    - name: Probe the admin surface (informational only)
+      ansible.builtin.uri:
+        url: "{{ vaultwarden_url }}/admin"
+        method: GET
+        status_code: [200, 302, 401, 404]
+        follow_redirects: none
+        return_content: false
+      register: vw_admin
+      failed_when: false
+
+    - name: Summary
+      ansible.builtin.debug:
+        msg: >-
+          Vaultwarden OK — /alive returned 200. Admin surface at /admin returned
+          {{ vw_admin.status | default('unreachable') }} (200/302/401 = token-gated as expected;
+          404 = admin disabled because ADMIN_TOKEN is unset — also a valid lockdown). Now run the
+          SC-002 manual drills: a browser register attempt is REFUSED (SIGNUPS_ALLOWED=false) and
+          /admin requires the Argon2 token. This play is read-only; re-runs change nothing.

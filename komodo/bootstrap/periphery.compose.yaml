@@ -68,6 +68,12 @@ services:
       # BESZEL_ADMIN_* are workstation/one-time only and are intentionally NOT here.
       TAUTULLI_API_KEY: ${TAUTULLI_API_KEY}
       BESZEL_KEY: ${BESZEL_KEY}
+      # --- Phase 7a (finance & secrets): container-referenced secrets. Actual needs NONE
+      # (login set in-app). VAULTWARDEN_ADMIN_TOKEN → vaultwarden's /admin; SURE_* → the Sure
+      # web/worker/db. Each stack compose resolves these forwarded values as ${VAR}.
+      VAULTWARDEN_ADMIN_TOKEN: ${VAULTWARDEN_ADMIN_TOKEN}
+      SURE_SECRET_KEY_BASE: ${SURE_SECRET_KEY_BASE}
+      SURE_POSTGRES_PASSWORD: ${SURE_POSTGRES_PASSWORD}
     volumes:
       # Drive the node's Docker engine.
       - /var/run/docker.sock:/var/run/docker.sock

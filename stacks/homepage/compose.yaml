@@ -49,6 +49,19 @@ configs:
               href: https://beszel.ragnaforge.xyz
               description: Fleet metrics — CPU/RAM/disk/temps + per-container (dashboards only)
       - Apps:
+          - Vaultwarden:
+              icon: vaultwarden.png
+              href: https://vaultwarden.ragnaforge.xyz
+              description: Passwords — E2E-encrypted vault (LAN/VPN only)
+          - Actual:
+              icon: actual-budget.png
+              href: https://actual.ragnaforge.xyz
+              description: Budgeting (local-first)
+          - Sure:
+              # New Maybe fork — brand icon may not be in the set yet; mdi- fallback is safe.
+              icon: mdi-finance
+              href: https://sure.ragnaforge.xyz
+              description: Net-worth / wealth tracking (Maybe fork)
           - whoami:
               icon: traefik.png
               href: https://whoami.ragnaforge.xyz

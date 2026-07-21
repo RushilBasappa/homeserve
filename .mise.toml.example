@@ -147,3 +147,23 @@ BESZEL_KEY = "changeme-beszel-hub-ssh-ed25519-public-key"
 # container env, so NOT forwarded to Periphery.
 BESZEL_ADMIN_EMAIL    = "changeme-beszel-admin-email"
 BESZEL_ADMIN_PASSWORD = "changeme-beszel-admin-password"
+
+# --- Phase 7a: Apps — finance & secrets (Actual + Vaultwarden + Sure) (research R1, R3, R4) ---
+#
+# Only THREE secrets are container-referenced this phase — Actual needs NONE (its login
+# password is set in-app on first run). All three are forwarded to the Periphery env
+# (komodo/bootstrap/periphery.compose.yaml) and read in each stack compose as ${VAR}.
+
+# Vaultwarden /admin token — as an ARGON2 PHC HASH (never plaintext). Generate with:
+#   docker run --rm -it vaultwarden/server /vaultwarden hash
+# Paste the printed `$argon2id$v=19$m=...` string here VERBATIM. Single `$`, NO escaping:
+# mise has env_shell_expand=false and the stack references it as ${VAULTWARDEN_ADMIN_TOKEN},
+# so the `$` signs pass through untouched — the `$$`-in-compose escaping is NOT needed here.
+VAULTWARDEN_ADMIN_TOKEN = "changeme-argon2-admin-token-hash"
+
+# Sure (Maybe fork) Rails secret key base. Generate:  openssl rand -hex 64
+SURE_SECRET_KEY_BASE = "changeme-sure-secret-key-base-128hex"
+
+# Sure PostgreSQL password — used by the `db` service AND the web/worker app (one value,
+# referenced as ${SURE_POSTGRES_PASSWORD} in both). Generate:  openssl rand -hex 32
+SURE_POSTGRES_PASSWORD = "changeme-sure-postgres-password-64hex"

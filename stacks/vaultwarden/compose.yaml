@@ -1,0 +1,71 @@
+# vaultwarden — self-hosted, Bitwarden-compatible password server (research R1; US1).
+# Dell-only (stateful, golden rule). The MOST safety-critical app in the lab.
+#
+# END-TO-END ENCRYPTED: the vault is encrypted/decrypted CLIENT-side with a key derived from
+# the master password; this server only ever stores CIPHERTEXT and never receives the master
+# password. So master-password loss is unrecoverable BY DESIGN — which is exactly why the
+# Phase-10 backup of vaultwarden-data matters.
+#
+# LOCKDOWN (spec FR-003, SC-002): SIGNUPS_ALLOWED=false (no open registration) + an
+# Argon2-hashed ADMIN_TOKEN gating /admin. For a FRESH start, bring up ONCE with
+# SIGNUPS_ALLOWED=true, create the account(s), then flip back to false and redeploy (see the
+# runbook). For a RESTORED vault, keep it false from the start.
+#
+# LAN/VPN-ONLY (FR-015): fronted by Traefik at vaultwarden.ragnaforge.xyz (AdGuard → Dell);
+# NO host ports, NO router forward. The old websocket port 3012 was REMOVED (v1.31.0) and
+# folded into :80 — do NOT publish it; Traefik forwards the WebSocket Upgrade header to
+# /notifications/hub automatically.
+#
+# STATE: vaultwarden-data is a local named volume on the Dell holding db.sqlite3,
+# attachments/, sends/, rsa_key.* (JWT keys), config.json. Survives redeploy (FR-004).
+# Existing vault preserved by restoring /data (stop first; drop a stale db.sqlite3-wal).
+#
+# ADMIN_TOKEN escaping — HONEST REFINEMENT (implement): because the token is referenced as
+# ${VAULTWARDEN_ADMIN_TOKEN} (an env substitution) and mise has env_shell_expand=false, the
+# Argon2 '$' characters pass through UNTOUCHED — the classic '$'→'$$' compose escaping is NOT
+# needed here. (It would only be needed if the hash were pasted LITERALLY into this file.)
+#
+# IMAGE TAG: pinned (no :latest) per Diun/Phase-10 intent. Verify/bump current stable:
+# https://github.com/dani-garcia/vaultwarden/releases
+
+services:
+  vaultwarden:
+    image: vaultwarden/server:1.36.0-alpine
+    container_name: vaultwarden
+    restart: unless-stopped
+    environment:
+      # External URL — must match how it is reached (WebAuthn/attachments/websocket URLs).
+      DOMAIN: https://vaultwarden.ragnaforge.xyz
+      # No open registration (flip to true ONLY for the one-time fresh-start account, then back).
+      SIGNUPS_ALLOWED: "false"
+      # Invite household members with signups closed (default; scope with SIGNUPS_DOMAINS_WHITELIST).
+      INVITATIONS_ALLOWED: "true"
+      # Argon2 PHC hash gating /admin. Value comes UNTOUCHED from the mise env (see header) —
+      # no '$$' escaping because this is a ${VAR} reference, not an inlined literal.
+      ADMIN_TOKEN: ${VAULTWARDEN_ADMIN_TOKEN}
+    volumes:
+      - vaultwarden-data:/data
+    networks:
+      - traefik
+    healthcheck:
+      # /alive returns the server datetime — the canonical liveness endpoint (busybox wget).
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:80/alive"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    labels:
+      # --- canonical Traefik routing labels; Vaultwarden listens on 80 in Docker ---
+      - "traefik.enable=true"
+      - "traefik.http.routers.vaultwarden.rule=Host(`vaultwarden.ragnaforge.xyz`)"
+      - "traefik.http.routers.vaultwarden.entrypoints=websecure"
+      - "traefik.http.routers.vaultwarden.tls=true"
+      - "traefik.http.services.vaultwarden.loadbalancer.server.port=80"
+
+volumes:
+  # Local named volume on the Dell (golden rule: encrypted vault store → the Dell).
+  vaultwarden-data:
+
+networks:
+  # Shared external proxy network — reached only via Traefik (no host ports).
+  traefik:
+    external: true

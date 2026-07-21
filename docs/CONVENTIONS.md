@@ -67,7 +67,11 @@ host ports — reached only via Traefik labels. The Mac helpers publish LAN port
 because Traefik (Dell-only, label-based) can't see Mac containers; they are fronted
 at `<app>.ragnaforge.xyz` by Traefik's **file** provider → `10.0.0.71:<port>` (see
 `stacks/traefik/compose.yaml`). qBittorrent's peer traffic egresses via Proton, never
-an inbound router forward. Table grows as stacks land.)_
+an inbound router forward. Phase-7a: the Vaultwarden (`80`), Actual (`5006`), and Sure
+`web` (`3000`) UIs on the **Dell** publish **no** host ports — Traefik-only at
+`vaultwarden`/`actual`/`sure.ragnaforge.xyz`; Sure's Postgres (`5432`) and Redis (`6379`)
+are internal to the `sure` network and never published; nothing is router-forwarded
+(passwords + finances are **LAN/VPN-only**). Table grows as stacks land.)_
 
 ---
 

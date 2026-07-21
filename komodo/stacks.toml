@@ -265,3 +265,50 @@ git_provider = "github.com"
 branch = "main"
 file_paths = ["stacks/beszel/agent.compose.yaml"]
 webhook_enabled = false
+
+# ============================================================================
+# Phase 7a — Apps: finance & secrets (research R1–R5; contract stack-inventory).
+# THREE stateful personal-data stacks → ragnaforge-dell (golden rule). Standalone —
+# no inter-app wiring. `sure` is ONE stack with four services (web+worker+db+redis).
+# All manual (webhook_enabled=false). Bring-up + one-time data restore in
+# docs/runbooks/phase7a-finance-secrets.md. LAN/VPN-only — no router forward.
+# ============================================================================
+
+[[stack]]
+name = "vaultwarden"
+description = "Phase-7a — self-hosted password server (Bitwarden-compatible; E2E-encrypted; signups locked)."
+tags = ["phase-7a", "apps"]
+
+[stack.config]
+server = "ragnaforge-dell"
+repo = "RushilBasappa/homeserve"
+git_provider = "github.com"
+branch = "main"
+file_paths = ["stacks/vaultwarden/compose.yaml"]
+webhook_enabled = false
+
+[[stack]]
+name = "actual"
+description = "Phase-7a — self-hosted budgeting (local-first; plain HTTP behind Traefik)."
+tags = ["phase-7a", "apps"]
+
+[stack.config]
+server = "ragnaforge-dell"
+repo = "RushilBasappa/homeserve"
+git_provider = "github.com"
+branch = "main"
+file_paths = ["stacks/actual/compose.yaml"]
+webhook_enabled = false
+
+[[stack]]
+name = "sure"
+description = "Phase-7a — net-worth / wealth tracking (Maybe fork; web+worker+postgres+redis; self-migrates)."
+tags = ["phase-7a", "apps"]
+
+[stack.config]
+server = "ragnaforge-dell"
+repo = "RushilBasappa/homeserve"
+git_provider = "github.com"
+branch = "main"
+file_paths = ["stacks/sure/compose.yaml"]
+webhook_enabled = false
