@@ -32,6 +32,11 @@ pms_ip = plex
 pms_port = 32400
 pms_ssl = 0
 pms_is_remote = 0
+# MANUAL connection is REQUIRED — otherwise Tautulli auto-discovers Plex's published
+# external URL (plex.ragnaforge.xyz:443 as HTTP) and every stats poll 404s at the edge.
+# Both containers share the `traefik` network, so http://plex:32400 is the right path.
+pms_url_manual = 1
+pms_url = http://plex:32400
 # The Plex SERVER token (same as PLEX_TOKEN in .mise.toml — the token Maintainerr uses).
 pms_token = REPLACE_WITH_PLEX_TOKEN
 # Plex machine identifier — fetch from Plex: the `machineIdentifier` in the XML at

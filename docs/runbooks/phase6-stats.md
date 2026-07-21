@@ -62,6 +62,14 @@ Steps:
    server, and set the API key to your `TAUTULLI_API_KEY` value (Settings → Web Interface → API).
    Set history retention to a bounded window (FR-005). See `stacks/tautulli/configure/config.ini.example`
    for the exact keys if you prefer to seed the volume instead of clicking.
+   - **⚠️ Use a MANUAL Plex connection, not auto-discovery.** The wizard's auto-discovery picks
+     Plex's *published external URL* (`plex.ragnaforge.xyz:443`) and sets it as HTTP-on-a-TLS-port,
+     so every stats poll hits the Traefik edge → `404`, "error communicating with your Plex
+     Server", no stats. Fix: Settings → Plex Media Server → **Manual Connection** →
+     IP/Host `plex`, Port `32400`, SSL **off** (both containers share the `traefik` network, so
+     `http://plex:32400` is the correct edge-free path). config.ini ends up:
+     `pms_ip = plex`, `pms_port = 32400`, `pms_ssl = 0`, `pms_url = http://plex:32400`,
+     `pms_url_manual = 1`. (This is what `configure/config.ini.example` already documents.)
 3. Assert + verify (idempotent, re-runnable):
    `cd stacks/tautulli/configure && mise exec -- ansible-playbook setup.yml`
    → confirms the API is reachable, Plex is connected **read-only**, history is accumulating;

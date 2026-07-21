@@ -26,11 +26,12 @@
 # IMAGE TAG: pinned (no :latest). Confirm/bump at deploy:
 # https://github.com/henrygd/beszel/releases
 
-configs:
-  beszel-systems:
-    # Declarative fleet — imported by the hub on start (research R3). Inlined so it is
-    # git-tracked and Komodo-safe (no host bind mount).
-    file: ./config.yml
+# SYSTEMS (the Dell + Mac agents) are added ONCE in the hub UI for now (research R3
+# fallback). The declarative config.yml/config-sync path is DEFERRED: Komodo can't bind
+# `file: ./config.yml` from a git-pulled clone (the relative path doesn't resolve, the
+# same reason Homepage inlines its config), and Beszel 0.9.1's config-sync schema is
+# unverified. `stacks/beszel/config.yml` is kept as the source-of-truth reference for
+# what to add. Revisit as inline `configs: content:` once the schema is confirmed.
 
 services:
   beszel:
@@ -39,9 +40,6 @@ services:
     restart: unless-stopped
     volumes:
       - beszel-data:/beszel_data
-    configs:
-      - source: beszel-systems
-        target: /beszel_data/config.yml
     networks:
       - traefik
     labels:
