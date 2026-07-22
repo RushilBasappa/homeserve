@@ -27,8 +27,9 @@
 
   vars:
     wger_url: "https://wger.ragnaforge.xyz"
-    # A stable, non-hashed static asset shipped by Django's admin — present after any collectstatic.
-    wger_static_probe: "/static/admin/css/base.css"
+    # A stable, non-hashed static asset wger ships (verified served by nginx at deploy). wger does
+    # NOT ship Django-admin static at /static/admin/..., so probe a real wger asset instead.
+    wger_static_probe: "/static/bootstrap-compiled.css"
 
   tasks:
     # ---- App up behind the proxy? (root returns the app over valid TLS) -------------------

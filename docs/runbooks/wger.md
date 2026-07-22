@@ -37,10 +37,13 @@ Operating the fleet: [[homeserve-ops-access]].
    manual step**: `db` + `cache` healthy → `web` migrates + collects static → `nginx` + `celery_worker`
    → `celery_beat`.
 3. **FIRST-RUN SECURITY STEP — change the admin password.** wger auto-creates a bootstrap `admin`
-   account on first boot (default **`admin` / `adminadmin`**). Log in and **change the password
-   immediately** (Dashboard → user menu → change password, or Django admin). This is the primary account;
-   registration is closed (`ALLOW_REGISTRATION=False`), so add household members from within wger, not
-   via self-signup.
+   account on first boot (default **`admin` / `adminadmin`**). Log in at
+   **`https://wger.ragnaforge.xyz/en/user/login`** and **change the password immediately** (user menu →
+   change password, or Django admin). This is the primary account; registration is closed
+   (`ALLOW_REGISTRATION=False`), so add household members from within wger, not via self-signup.
+
+   URL notes (wger does NOT append trailing slashes to these): login `/en/user/login`, dashboard
+   `/en/dashboard` (302→login when logged out), anonymous landing `/en/software/features`.
 4. (Optional) Run the plane-3 assert: `cd stacks/wger/configure && mise exec -- ansible-playbook setup.yml`
    → asserts `/` 200 + a static asset 200 (nginx serving) + reports the registration-page status. A
    second run is a no-op.
@@ -82,14 +85,23 @@ are not part of standing wger up. The stand-up → Phase-10 window is a known, d
 
 Fill from the live runs (tasks T012 / T014 / T015 / T016 / T018 / T019 / T020 / T022).
 
+Verified live during bring-up on 2026-07-22 (commit 2c85ef1); operator drills still to run are marked.
+
 | SC | What it proves | Evidence | Pass? |
 |----|----------------|----------|-------|
-| SC-001 | Log workout/weight/nutrition; present after re-login on another device | _(pending live run)_ | ☐ |
-| SC-002 | Account + entries survive restart + redeploy — 0 loss | _(pending)_ | ☐ |
-| SC-003 | Cold deploy healthy, no manual step; redeploy idempotent | _(pending)_ | ☐ |
-| SC-004 | Static + media served through nginx; UI styled; 0 broken assets | _(pending)_ | ☐ |
-| SC-005 | Celery worker/beat healthy; exercise DB populates; logging never blocked | _(pending)_ | ☐ |
-| SC-006 | Valid TLS (HTTP→HTTPS) + Homepage tile + login with 0 host/CSRF errors | _(pending)_ | ☐ |
-| SC-007 | Self-registration refused | _(pending)_ | ☐ |
-| SC-008 | 0 public paths; 0 host ports; LAN/Tailscale/VPN-only | _(pending)_ | ☐ |
-| SC-009 | 0 secrets in git; 100% state on the Dell | _(pending)_ | ☐ |
+| SC-001 | Log workout/weight/nutrition; present after re-login on another device | operator drill (log in, record entries) | ☐ |
+| SC-002 | Account + entries survive restart + redeploy — 0 loss | partial: DestroyStack+DeployStack preserved all 4 volumes (pgdata/media/static/redis); data drill pending | ◑ |
+| SC-003 | Cold deploy healthy, no manual step; redeploy idempotent | ✅ all 6 services healthy from cold deploy; migrate+collectstatic ran on boot (0 manual); Destroy+Deploy re-converged | ✅ |
+| SC-004 | Static + media served through nginx; UI styled; 0 broken assets | ✅ `/static/bootstrap-compiled.css` → 200 (273 KB via nginx); assert play passes. Media upload drill pending | ◑ |
+| SC-005 | Celery worker/beat healthy; exercise DB populates; logging never blocked | ✅ worker healthy, beat up; `/api/v2/exercise/` → 200. Full exercise-lib populate needs sync time | ◑ |
+| SC-006 | Valid TLS (HTTP→HTTPS) + Homepage tile + login with 0 host/CSRF errors | ✅ Let's Encrypt cert; HTTP→HTTPS 301; `GET /` 200 & login page 200 behind proxy (0 host/CSRF errors). Homepage tile needs `homepage` redeploy | ◑ |
+| SC-007 | Self-registration refused | ✅ registration page 302 (closed, ALLOW_REGISTRATION=False); browser register-attempt drill pending | ◑ |
+| SC-008 | 0 public paths; 0 host ports; LAN/Tailscale/VPN-only | operator audit (`docker ps` no host ports; no router forward) | ☐ |
+| SC-009 | 0 secrets in git; 100% state on the Dell | ✅ `git grep` 0 secret values; all 4 volumes Dell-local (`wger_wger-*`) | ✅ |
+
+**Bring-up gotchas hit & fixed (2026-07-22):** (1) `wger/server:2.3` doesn't exist → pinned `2.6.0`.
+(2) Cherry-picked env crash-looped web (`django_redis` needs the *whole* cache group; missing
+`WGER_USE_GUNICORN` ran the dev server) → full upstream env via `env_file: config/prod.env`.
+(3) `*.env` gitignore swallowed prod.env → scoped `!` exception (secret-free). (4) **nginx `upstream`
+resolved bare `web` to the Phase-7a `sure` stack's `web` on the shared `traefik` network (502)** →
+target the unique container name `wger-web`. See [[homeserve-traefik-web-name-collision]].
