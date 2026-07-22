@@ -158,8 +158,13 @@ configs:
   # interpolation so nginx sees a literal `$`.
   wger-nginx:
     content: |
+      # Upstream targets the UNIQUE container name `wger-web`, NOT the service name `web`:
+      # nginx sits on the shared `traefik` network where other stacks (e.g. Phase-7a `sure`) also
+      # register a service named `web`, making the bare `web` alias AMBIGUOUS — Docker DNS would
+      # resolve it to the wrong container (a 502). `wger-web` is globally unique. (Upstream's file
+      # uses `web`; this is the one lab-specific deviation, forced by the multi-stack shared network.)
       upstream wger {
-          server web:8000;
+          server wger-web:8000;
       }
 
       map $$http_x_forwarded_proto $$final_forwarded_proto {
