@@ -167,3 +167,13 @@ SURE_SECRET_KEY_BASE = "changeme-sure-secret-key-base-128hex"
 # Sure PostgreSQL password — used by the `db` service AND the web/worker app (one value,
 # referenced as ${SURE_POSTGRES_PASSWORD} in both). Generate:  openssl rand -hex 32
 SURE_POSTGRES_PASSWORD = "changeme-sure-postgres-password-64hex"
+
+# --- wger: self-hosted fitness / workout tracker (spec 009) ---
+# Two container secrets, referenced in stacks/wger/compose.yaml as ${VAR} and forwarded to the
+# Periphery env. No JWT keys (the mobile app / PowerSync sync is out of scope).
+#
+# Django SECRET_KEY (web + celery). Generate:  openssl rand -hex 50
+WGER_SECRET_KEY = "changeme-wger-django-secret-key-100hex"
+# wger PostgreSQL password — used by the `db` service AND the web/celery app (one value,
+# referenced as ${WGER_POSTGRES_PASSWORD} in both). Generate:  openssl rand -hex 32
+WGER_POSTGRES_PASSWORD = "changeme-wger-postgres-password-64hex"

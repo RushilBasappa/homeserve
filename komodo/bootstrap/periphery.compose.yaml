@@ -74,6 +74,11 @@ services:
       VAULTWARDEN_ADMIN_TOKEN: ${VAULTWARDEN_ADMIN_TOKEN}
       SURE_SECRET_KEY_BASE: ${SURE_SECRET_KEY_BASE}
       SURE_POSTGRES_PASSWORD: ${SURE_POSTGRES_PASSWORD}
+      # --- wger (fitness): container-referenced secrets. WGER_SECRET_KEY → Django SECRET_KEY on
+      # web/celery; WGER_POSTGRES_PASSWORD → the db POSTGRES_PASSWORD + the app's DB password (same
+      # value). No JWT keys (mobile app / PowerSync excluded). Resolved in the compose as ${VAR}.
+      WGER_SECRET_KEY: ${WGER_SECRET_KEY}
+      WGER_POSTGRES_PASSWORD: ${WGER_POSTGRES_PASSWORD}
     volumes:
       # Drive the node's Docker engine.
       - /var/run/docker.sock:/var/run/docker.sock

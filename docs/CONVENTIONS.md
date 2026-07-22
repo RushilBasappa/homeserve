@@ -71,7 +71,10 @@ an inbound router forward. Phase-7a: the Vaultwarden (`80`), Actual (`5006`), an
 `web` (`3000`) UIs on the **Dell** publish **no** host ports — Traefik-only at
 `vaultwarden`/`actual`/`sure.ragnaforge.xyz`; Sure's Postgres (`5432`) and Redis (`6379`)
 are internal to the `sure` network and never published; nothing is router-forwarded
-(passwords + finances are **LAN/VPN-only**). Table grows as stacks land.)_
+(passwords + finances are **LAN/VPN-only**). **wger** (spec 009): the routed service is
+**nginx** (`80`) at `wger.ragnaforge.xyz` — the Django `web` (`8000`), Postgres (`5432`),
+and Redis (`6379`) are internal to the `wger` network and publish **no** host ports;
+nothing is router-forwarded (LAN/VPN-only). Table grows as stacks land.)_
 
 ---
 

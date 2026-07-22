@@ -1,0 +1,90 @@
+---
+# stacks/wger/configure/setup.yml — PLANE 3 (application setup), co-located with the wger stack,
+# run POST-DEPLOY, idempotently (spec FR-016/SC-003). It ASSERTS the app is live behind the proxy and
+# — critically — that nginx is actually SERVING STATIC (wger's signature self-host failure mode). It is
+# READ-ONLY: it never creates a user, never writes to the DB, never uploads media.
+#
+# MODEL (same as stacks/vaultwarden/configure/setup.yml): runs on the WORKSTATION (localhost), talks to
+# wger over its public https URL. No secrets are needed for the assert.
+#
+# WHY the static check is the point: routing to web:8000 instead of nginx, or a broken shared
+# static/media volume, yields a served-but-UNSTYLED site + 404 media. We assert a STABLE Django-admin
+# static asset (/static/admin/css/base.css) — collectstatic always gathers it and its path is not
+# content-hashed — so a 200 proves nginx is serving static correctly (FR-005, SC-004).
+#
+# SCOPE — HONEST REFINEMENT (as with vaultwarden): a FULLY non-mutating registration-closed check is
+# not reliable (a POST to the register endpoint would CREATE a user if registration were unexpectedly
+# open — the very failure we test for). So this play probes the registration PAGE (GET) and reports its
+# status; the definitive SC-007 drill (a browser register attempt is refused) is the operator's,
+# recorded in docs/runbooks/wger.md. Re-runs change nothing.
+#
+# RUN:  cd stacks/wger/configure && mise exec -- ansible-playbook setup.yml
+
+- name: wger — assert live behind the proxy + nginx serving static (plane 3, read-only)
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    wger_url: "https://wger.ragnaforge.xyz"
+    # A stable, non-hashed static asset shipped by Django's admin — present after any collectstatic.
+    wger_static_probe: "/static/admin/css/base.css"
+
+  tasks:
+    # ---- App up behind the proxy? (root returns the app over valid TLS) -------------------
+    - name: GET the wger root over TLS
+      ansible.builtin.uri:
+        url: "{{ wger_url }}/"
+        method: GET
+        status_code: 200
+        return_content: false
+      register: wger_root
+
+    - name: Fail loudly if wger is not reachable over TLS
+      ansible.builtin.assert:
+        that:
+          - wger_root.status == 200
+        fail_msg: >-
+          wger did not answer GET / at {{ wger_url }} with 200. Confirm the stack is deployed, the
+          Traefik route points at the nginx service, and the wildcard cert is valid — see
+          docs/runbooks/wger.md. (A disallowed-host / CSRF error here usually means SITE_URL /
+          CSRF_TRUSTED_ORIGINS / X_FORWARDED_* are misconfigured.)
+
+    # ---- nginx serving static? (the wger-specific correctness check) ----------------------
+    - name: GET a stable Django-admin static asset through nginx
+      ansible.builtin.uri:
+        url: "{{ wger_url }}{{ wger_static_probe }}"
+        method: GET
+        status_code: 200
+        return_content: false
+      register: wger_static
+
+    - name: Fail loudly if static is not served (unstyled-site failure mode)
+      ansible.builtin.assert:
+        that:
+          - wger_static.status == 200
+        fail_msg: >-
+          {{ wger_static_probe }} did not return 200 — nginx is NOT serving static. The site will load
+          UNSTYLED and media will 404. Confirm Traefik routes to the `nginx` service (not web:8000),
+          the inline nginx.conf materialised at /etc/nginx/conf.d/default.conf, and the shared
+          wger-static volume is mounted rw on web / ro on nginx. See docs/runbooks/wger.md.
+
+    # ---- Registration closed? (informational — the mutating drill is the operator's) ------
+    - name: Probe the registration page (informational only)
+      ansible.builtin.uri:
+        url: "{{ wger_url }}/en/user/registration"
+        method: GET
+        status_code: [200, 301, 302, 403, 404]
+        follow_redirects: none
+        return_content: false
+      register: wger_reg
+      failed_when: false
+
+    - name: Summary
+      ansible.builtin.debug:
+        msg: >-
+          wger OK — GET / = 200 and {{ wger_static_probe }} = 200 (nginx is serving static; the UI will
+          render styled). Registration page returned {{ wger_reg.status | default('unreachable') }}
+          (404 / redirect = disabled as expected with ALLOW_REGISTRATION=False; 200 means the page is
+          reachable — run the SC-007 drill to confirm an actual register attempt is REFUSED). This play
+          is read-only; re-runs change nothing.

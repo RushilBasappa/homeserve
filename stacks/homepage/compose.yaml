@@ -62,6 +62,11 @@ configs:
               icon: mdi-finance
               href: https://sure.ragnaforge.xyz
               description: Net-worth / wealth tracking (Maybe fork)
+          - wger:
+              # Brand icon may not be in the set yet; mdi- fallback is safe (cf. Sure).
+              icon: mdi-dumbbell
+              href: https://wger.ragnaforge.xyz
+              description: Fitness / workout / nutrition tracker (LAN/VPN only)
           - whoami:
               icon: traefik.png
               href: https://whoami.ragnaforge.xyz

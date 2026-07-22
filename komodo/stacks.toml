@@ -312,3 +312,26 @@ git_provider = "github.com"
 branch = "main"
 file_paths = ["stacks/sure/compose.yaml"]
 webhook_enabled = false
+
+# ============================================================================
+# wger — self-hosted fitness / workout / nutrition tracker (spec 009). An ADDED
+# app riding the existing platform (edge/DNS/TLS/storage/Komodo) — NOT a formal
+# PLAN phase. Stateful → ragnaforge-dell (golden rule). ONE stack, SIX services
+# (web+nginx+celery_worker+celery_beat+db+cache); the HEAVIEST single stack in
+# the lab. nginx is MANDATORY and Traefik routes to IT (not web). LAN/VPN-only —
+# no router forward. Bring-up + first-run admin-password change in
+# docs/runbooks/wger.md. Manual deploy (webhook_enabled=false).
+# ============================================================================
+
+[[stack]]
+name = "wger"
+description = "wger — self-hosted fitness/workout/nutrition tracker (Django; web+nginx+celery+postgres+redis; self-migrates)."
+tags = ["apps"]
+
+[stack.config]
+server = "ragnaforge-dell"
+repo = "RushilBasappa/homeserve"
+git_provider = "github.com"
+branch = "main"
+file_paths = ["stacks/wger/compose.yaml"]
+webhook_enabled = false

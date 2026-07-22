@@ -212,6 +212,13 @@ the box can take it. Dashboards/visibility only; push alerting lands in Phase 9.
 - **Deliverable:** all apps at `https://<name>.ragnaforge.xyz`.
   **Depends on:** Phase 3.
 
+### Added apps (beyond the numbered phases)
+Apps stood up on the existing platform outside the original roadmap — same house pattern
+(Compose stack + Traefik labels + Homepage tile + Dell config volume), **not** numbered phases.
+- **wger** — self-hosted fitness / workout / nutrition tracker (Django; web+nginx+celery+postgres+redis;
+  the heaviest single stack in the lab). Spec/design: `specs/009-wger-fitness/`; runbook:
+  `docs/runbooks/wger.md`. **Depends on:** Phase 3.
+
 ### Phase 8 — VPN #2 (wg-easy)
 **Objective:** family/friends + Fire TV on the network, easy onboarding.
 - **wg-easy** stack on the Dell; router forwards **UDP 51820 → 10.0.0.70**;
