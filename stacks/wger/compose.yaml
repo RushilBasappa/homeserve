@@ -83,7 +83,7 @@ x-wger-env: &wger-env
 services:
   # --- Django app (self-migrates on boot; NOT routed directly) -----------------------------
   web:
-    image: docker.io/wger/server:2.3   # VERIFY/BUMP at deploy — never :latest
+    image: docker.io/wger/server:2.6.0   # VERIFY/BUMP at deploy — never :latest (latest stable as of 2026-07)
     container_name: wger-web
     restart: unless-stopped
     environment: *wger-env
@@ -140,7 +140,7 @@ services:
 
   # --- Celery worker (background jobs; no route; best-effort) -------------------------------
   celery_worker:
-    image: docker.io/wger/server:2.3   # keep in lockstep with web
+    image: docker.io/wger/server:2.6.0   # keep in lockstep with web
     container_name: wger-celery-worker
     restart: unless-stopped
     command: ["/start-worker"]
@@ -159,7 +159,7 @@ services:
 
   # --- Celery beat (scheduler; no route) ---------------------------------------------------
   celery_beat:
-    image: docker.io/wger/server:2.3   # keep in lockstep with web
+    image: docker.io/wger/server:2.6.0   # keep in lockstep with web
     container_name: wger-celery-beat
     restart: unless-stopped
     command: ["/start-beat"]
