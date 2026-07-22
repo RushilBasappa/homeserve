@@ -4,6 +4,10 @@
 # Environment files (any name).
 .env
 *.env
+# EXCEPTION: wger's NON-secret config (loaded via env_file). Its two real secrets
+# (SECRET_KEY, POSTGRES_PASSWORD) are NOT here — they come from mise via the compose
+# `environment:` block. Reviewed secret-free; committed on purpose.
+!stacks/wger/config/prod.env
 
 # --- Generated / rendered artifacts ---
 # Output that tooling produces from tracked sources — regenerate, don't commit.
