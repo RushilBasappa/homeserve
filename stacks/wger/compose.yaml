@@ -1,94 +1,50 @@
 # wger — self-hosted workout / fitness / nutrition manager (spec 009; AGPLv3). Dell-only (stateful).
 #
-# The HEAVIEST single stack in the lab: a Django app that inherently needs a static-serving nginx,
-# a Celery worker AND beat, PostgreSQL, and Redis. Modelled on the upstream wger-project/docker
-# PRODUCTION compose, TRIMMED of the PowerSync mobile-offline-sync service (spec Out of Scope) and
-# all optional integrations (email / reCAPTCHA / S3 / Prometheus).
+# Structure mirrors upstream wger-project/docker's PRODUCTION compose, minus the PowerSync
+# mobile-offline-sync service and all optional integrations (out of scope). Six services:
+#   web    — Django/Gunicorn :8000 (the app). Migrates + collects static on boot → self-migrates.
+#   nginx  — MANDATORY reverse proxy :80. Serves /static + /media from the SHARED volumes and
+#            proxies the rest to web:8000. THIS is the service Traefik routes to (routing to
+#            web:8000 directly = unstyled site + 404 media). Config is upstream's nginx.conf minus
+#            the PowerSync blocks (see the inline `configs:` note at the bottom).
+#   celery_worker / celery_beat — same wger image (/start-worker, /start-beat); exercise sync.
+#   db     — postgres:15-alpine (service name MUST be `db`; wger defaults its DB host to it).
+#   cache  — redis:7-alpine (Django cache /1 + Celery broker/backend /2; MUST be `cache`).
 #
-# TOPOLOGY (research R1; FR-004):
-#   web    — Django/Gunicorn on :8000 (the app). Image default entrypoint `/start` runs migrations
-#            + collectstatic on boot (DJANGO_PERFORM_MIGRATIONS / DJANGO_COLLECTSTATIC_ON_STARTUP)
-#            → SELF-MIGRATES, no manual step (FR-006, SC-003). NOT routed directly.
-#   nginx  — MANDATORY reverse proxy on :80 (research R2; FR-005). Serves /static + /media from the
-#            SHARED volumes and proxies the rest to web:8000. THIS is the service Traefik routes to —
-#            routing to web:8000 directly yields a served-but-UNSTYLED site + 404 media (SC-004).
-#   celery_worker / celery_beat — same wger image (/start-worker, /start-beat). Exercise/ingredient
-#            DB sync + API-cache jobs (research R6). BEST-EFFORT: never gate core logging (SC-005).
-#   db     — postgres:15-alpine (the durable state: accounts, logs, weight, nutrition). Service name
-#            MUST be `db` (wger defaults its DB host to `db`).
-#   cache  — redis:7-alpine (Django cache /1 + Celery broker/backend /2). Service name MUST be `cache`.
+# CONFIG: all non-secret env lives in config/prod.env (loaded via `env_file:`, upstream's approach —
+# read by the compose CLI, so it's Komodo/git-clone safe, unlike a volume bind). Only the two SECRETS
+# are injected via `environment:` from mise (${WGER_SECRET_KEY}, ${WGER_POSTGRES_PASSWORD}).
 #
-# nginx CONFIG SHIPS INLINE via `configs: content:` (materialised in the container), NOT a
-# `./config/nginx.conf` bind — Komodo deploys from a git clone where a relative bind resolves to a
-# path the daemon can't find (empty mount), the same reason homepage/configarr/traefik/beszel inline
-# their config. TRADE-OFF: EDITING the inline nginx block later needs a container RECREATE
-# (DestroyStack+DeployStack), not just a redeploy. See homeserve-inline-configs-need-recreate.
+# LAN/VPN-ONLY (FR-013, SC-008): Traefik on `nginx`; db/cache internal-only, NO host ports, NO forward.
+# GOLDEN RULE: all volumes Dell-local; nothing on /srv/nfs or the Mac.
+# REGISTRATION: closed (config/prod.env ALLOW_REGISTRATION=False) — wger bootstraps an `admin` account
+#   on first boot (admin/adminadmin) → CHANGE ITS PASSWORD IMMEDIATELY (runbook step 1).
+# IMAGE TAGS — VERIFY/BUMP at deploy; re-sync config/prod.env against that release's upstream prod.env.
+#   https://github.com/wger-project/docker  •  https://hub.docker.com/r/wger/server/tags
 #
-# SHARED STATIC/MEDIA (the load-bearing detail): web WRITES to /home/wger/{static,media}; nginx READS
-# /wger/{static,media}:ro. Same named volumes, different container paths (per upstream). A broken share
-# = unstyled site / 404 media.
-#
-# TLS-BEHIND-PROXY (research R3; FR-010): Traefik terminates TLS. SITE_URL + CSRF_TRUSTED_ORIGINS carry
-# the public https origin, X_FORWARDED_PROTO_HEADER_SET / USE_X_FORWARDED_HOST trust Traefik's headers —
-# else logins CSRF-fail and asset URLs go wrong.
-#
-# LAN/VPN-ONLY (FR-013, SC-008): Traefik on `nginx` at wger.ragnaforge.xyz; db/cache are internal-only
-# (network `wger`), NO host ports, NO router forward.
-#
-# SECRETS (from mise → Periphery → ${VAR}): WGER_SECRET_KEY (openssl rand -hex 50),
-# WGER_POSTGRES_PASSWORD (openssl rand -hex 32). No JWT keys (mobile/PowerSync excluded). Non-secret
-# config is inlined (Komodo does not interpolate [[VAR]] into git-pulled compose).
-#
-# REGISTRATION (research R5; FR-012): ALLOW_REGISTRATION=False from the start — wger auto-creates a
-# bootstrap `admin` account on first boot (default admin/adminadmin) → CHANGE ITS PASSWORD IMMEDIATELY
-# (runbook step 1). No open-signup window needed.
-#
-# IMAGE TAGS — VERIFY/BUMP AT DEPLOY (Diun/Phase-10 intent). Pin explicit tags, never :latest. Confirm
-# the current wger release + that the exact env keys below still match the pinned image's
-# config/prod.env: https://github.com/wger-project/docker  •  https://hub.docker.com/r/wger/server/tags
-#
-# Note: the Celery-beat schedule is regenerable state (rebuilt on start) and is intentionally NOT
-# volumed here to avoid shipping an unverified mount path — add one at the verified beat path if
-# persistence is ever wanted.
+# The Celery-beat schedule is regenerable state (rebuilt on start) and is intentionally NOT volumed
+# (avoids an unverified mount path) — add one at the verified beat path if persistence is wanted.
 
-# --- Shared app env for web + celery (same image, same config) ---------------------------
-x-wger-env: &wger-env
-  # Django secret (from mise). The container var wger reads is SECRET_KEY.
-  SECRET_KEY: ${WGER_SECRET_KEY}
-  DJANGO_DEBUG: "False"
-  # Public origin — Traefik terminates TLS in front of nginx (research R3; FR-010).
-  SITE_URL: https://wger.ragnaforge.xyz
-  CSRF_TRUSTED_ORIGINS: https://wger.ragnaforge.xyz
-  X_FORWARDED_PROTO_HEADER_SET: "True"
-  USE_X_FORWARDED_HOST: "True"
-  AXES_IPWARE_PROXY_COUNT: "1"
-  # Self-migrate + collect static on boot (FR-006, SC-003).
-  DJANGO_PERFORM_MIGRATIONS: "True"
-  DJANGO_COLLECTSTATIC_ON_STARTUP: "True"
-  DJANGO_CLEAR_STATIC_FIRST: "False"
-  # Postgres (wger defaults the DB host to service `db`). POSTGRES_PASSWORD from mise.
-  POSTGRES_USER: wger
-  POSTGRES_PASSWORD: ${WGER_POSTGRES_PASSWORD}
-  POSTGRES_DB: wger
-  # Redis: Django cache on db /1, Celery broker/backend on db /2 (service `cache`).
-  DJANGO_CACHE_BACKEND: django_redis.cache.RedisCache
-  DJANGO_CACHE_LOCATION: redis://cache:6379/1
-  USE_CELERY: "True"
-  CELERY_BROKER: redis://cache:6379/2
-  CELERY_BACKEND: redis://cache:6379/2
-  # Registration CLOSED — the bootstrap `admin` is the only privileged account (research R5; FR-012).
-  ALLOW_REGISTRATION: "False"
-  ALLOW_GUEST_USERS: "False"
+# --- Shared config for the three app services (web + celery worker + beat) --------------------
+x-wger-app: &wger-app
+  image: docker.io/wger/server:2.6.0   # VERIFY/BUMP at deploy — never :latest
+  restart: unless-stopped
+  env_file:
+    - config/prod.env
+  environment:
+    # The only two secrets — injected from mise (Periphery env). Everything else is in prod.env.
+    SECRET_KEY: ${WGER_SECRET_KEY}
+    POSTGRES_PASSWORD: ${WGER_POSTGRES_PASSWORD}
+  networks:
+    - wger
 
 services:
   # --- Django app (self-migrates on boot; NOT routed directly) -----------------------------
   web:
-    image: docker.io/wger/server:2.6.0   # VERIFY/BUMP at deploy — never :latest (latest stable as of 2026-07)
+    <<: *wger-app
     container_name: wger-web
-    restart: unless-stopped
-    environment: *wger-env
     volumes:
-      # web WRITES here (collectstatic output + uploads). nginx reads the same volumes (below).
+      # web WRITES here (collectstatic output + uploads); nginx reads the same volumes (below).
       - wger-static:/home/wger/static
       - wger-media:/home/wger/media
     depends_on:
@@ -96,8 +52,6 @@ services:
         condition: service_healthy
       cache:
         condition: service_healthy
-    networks:
-      - wger
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8000"]
       interval: 30s
@@ -118,11 +72,9 @@ services:
       - wger-static:/wger/static:ro
       - wger-media:/wger/media:ro
     configs:
-      # Inline nginx.conf (NOT a host bind — Komodo-safe). Editing this needs a container RECREATE.
       - source: wger-nginx
         target: /etc/nginx/conf.d/default.conf
     networks:
-      # `wger` to reach web; `traefik` so ONLY nginx is routed.
       - wger
       - traefik
     healthcheck:
@@ -140,16 +92,12 @@ services:
 
   # --- Celery worker (background jobs; no route; best-effort) -------------------------------
   celery_worker:
-    image: docker.io/wger/server:2.6.0   # keep in lockstep with web
+    <<: *wger-app
     container_name: wger-celery-worker
-    restart: unless-stopped
     command: ["/start-worker"]
-    environment: *wger-env
     depends_on:
       web:
         condition: service_healthy
-    networks:
-      - wger
     healthcheck:
       test: ["CMD", "celery", "-A", "wger", "inspect", "ping"]
       interval: 60s
@@ -159,33 +107,27 @@ services:
 
   # --- Celery beat (scheduler; no route) ---------------------------------------------------
   celery_beat:
-    image: docker.io/wger/server:2.6.0   # keep in lockstep with web
+    <<: *wger-app
     container_name: wger-celery-beat
-    restart: unless-stopped
     command: ["/start-beat"]
-    environment: *wger-env
     depends_on:
       celery_worker:
         condition: service_healthy
-    networks:
-      - wger
 
   # --- PostgreSQL (the durable state) ------------------------------------------------------
   db:
     image: docker.io/postgres:15-alpine
     container_name: wger-db
     restart: unless-stopped
+    env_file:
+      - config/prod.env       # POSTGRES_USER / POSTGRES_DB / TZ
     environment:
-      POSTGRES_USER: wger
       POSTGRES_PASSWORD: ${WGER_POSTGRES_PASSWORD}
-      POSTGRES_DB: wger
-      TZ: Europe/Berlin
     volumes:
       - wger-pgdata:/var/lib/postgresql/data
     networks:
       - wger
     healthcheck:
-      # $$ escapes the compose interpolation so the shell expands $POSTGRES_USER at runtime.
       test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\""]
       interval: 10s
       timeout: 5s
@@ -208,8 +150,12 @@ services:
       retries: 5
 
 configs:
-  # Trimmed upstream nginx.conf — PowerSync `upstream`/`/ps/` block REMOVED (mobile sync out of scope).
-  # Shipped inline (content:) so Komodo's git-clone deploy has no relative ./config bind to resolve.
+  # Upstream config/nginx.conf, with ONLY the two PowerSync blocks removed (the `upstream powersync`
+  # and `location /ps/` — we don't run PowerSync, and nginx refuses to start with an unresolvable
+  # upstream). Shipped inline (content:) NOT as `configs: file:` because that bind-mounts and Komodo's
+  # git-clone deploy can't resolve a relative bind ([[homeserve-inline-configs-need-recreate]]) —
+  # so EDITING this block needs a container RECREATE, not just a redeploy. `$$` escapes compose
+  # interpolation so nginx sees a literal `$`.
   wger-nginx:
     content: |
       upstream wger {
