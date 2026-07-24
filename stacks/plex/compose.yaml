@@ -43,6 +43,21 @@ services:
       - plex-config:/config
       # Library, READ-ONLY (the servarr apps are the only writers).
       - /srv/nfs/media:/media:ro
+    ports:
+      # Direct LAN + wg-easy-tunnel access to Plex, so local devices and remote
+      # family reach 10.0.0.70:32400 WITHOUT the tunnel→Traefik→Plex hop that was
+      # buffering local playback (see docs/runbooks — Plex was Traefik-only).
+      #
+      # ⚠️ Bound to the LAN IP (10.0.0.70), NOT 0.0.0.0/[::]. The Xfinity IPv6
+      # firewall is open (for WireGuard), so a wildcard bind would expose Plex on
+      # the Dell's PUBLIC IPv6 — breaking the "one public port (wg 51820)" rule.
+      # Binding to 10.0.0.70 keeps it LAN-only: reachable directly on the LAN and
+      # via wg-easy (family route 10.0.0.0/24), never from the public internet.
+      #
+      # Pair with Plex → Settings → Network → Custom server access URLs =
+      # http://10.0.0.70:32400 (Secure connections = Preferred, not Required) so
+      # clients advertise/use this instead of https://plex.ragnaforge.xyz:443.
+      - "10.0.0.70:32400:32400/tcp"
     networks:
       - traefik
     labels:
