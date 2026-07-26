@@ -98,6 +98,10 @@ configs:
         # MagicDNS OFF — we want the existing *.ragnaforge.xyz names via AdGuard,
         # not *.tailnet names (research R4).
         magic_dns: false
+        # Split-tunnel DNS: do NOT override the client's global resolver — only the
+        # `split` entry below applies. (0.26.1 defaults override_local_dns=true, which
+        # then REQUIRES nameservers.global to be set; false is what we actually want.)
+        override_local_dns: false
         # base_domain must be set and must NOT be a parent of server_url's host
         # (headscale.ragnaforge.xyz) — so it is an unrelated placeholder here.
         base_domain: tailnet.internal
