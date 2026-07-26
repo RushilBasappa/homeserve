@@ -79,11 +79,11 @@ shared by US1 and US2. **⚠️ No user story work begins until this phase is co
 - [X] T009 Add the Traefik **TLSOption** `headscale-h1` with `alpnProtocols: ["http/1.1"]` to the existing Traefik **file provider** dynamic config. (research R2; [[homeserve-traefik-mac-routing]])
 - [X] T010 Add the Traefik router for `headscale`: `Host(headscale.ragnaforge.xyz)` on `websecure`, `tls=true` (wildcard `*.ragnaforge.xyz`), **`tls.options=headscale-h1@file`**, service → `headscale:8080` — as compose labels in `stacks/headscale/compose.yaml`. (research R2)
 - [ ] T011 ⏳ Forward the `HEADSCALE_API_KEY` env into the Dell Periphery environment (Komodo) so `${HEADSCALE_API_KEY}` resolves at deploy; generate a real value only when the optional UI (T024) is built.
-- [ ] T012 ⏳ Deploy the stack on the Dell via Komodo (DeployStack `headscale`); confirm the container is healthy and the expected `WRN listening without TLS` log appears (benign, TLS is at Traefik).
+- [X] T012 ⏳ Deploy the stack on the Dell via Komodo (DeployStack `headscale`); confirm the container is healthy and the expected `WRN listening without TLS` log appears (benign, TLS is at Traefik).
 - [X] T013 Author the Ansible assert `stacks/headscale/configure/assert.yml`: run `headscale configtest`, probe control TLS + liveness at `headscale.ragnaforge.xyz`, STUN reachability on `10.0.0.70:3478`, and route-approval state. Fail closed. (research R10; FR-011/INV-6)
-- [ ] T014 ⏳ **Validate BEFORE exposure**: run `docker exec headscale headscale configtest` and `ansible-playbook stacks/headscale/configure/assert.yml`; all green. (quickstart §0)
+- [X] T014 ⏳ **Validate BEFORE exposure**: run `docker exec headscale headscale configtest` and `ansible-playbook stacks/headscale/configure/assert.yml`; all green. (quickstart §0)
 - [ ] T015 ⏳ Open the **router forwards** on the xFi gateway: `443/tcp` and `3478/udp` → `10.0.0.70`. Keep the gateway on **Typical Security** (no public-v6 exposure). (research R3; INV-1/INV-2)
-- [ ] T016 ⏳ Join the **Dell** to its own tailnet as the subnet router: `sudo tailscale up --login-server https://headscale.ragnaforge.xyz --advertise-routes=10.0.0.0/24`; confirm the `10.0.0.0/24` route is **auto-approved** (`headscale nodes list` / `headscale routes list`). (research R5)
+- [X] T016 ⏳ Join the **Dell** to its own tailnet as the subnet router: `sudo tailscale up --login-server https://headscale.ragnaforge.xyz --advertise-routes=10.0.0.0/24`; confirm the `10.0.0.0/24` route is **auto-approved** (`headscale nodes list` / `headscale routes list`). (research R5)
 
 **Checkpoint**: Control plane deployed + validated + publicly reachable on 443/3478; the Dell advertises an approved `10.0.0.0/24` route. User stories can begin.
 
@@ -97,7 +97,7 @@ self-hosted Headscale, with **zero** dependence on Tailscale's SaaS control plan
 **Independent Test**: Enroll the owner laptop, take it off-LAN (tether to a phone), confirm it tunnels,
 resolves `whoami.ragnaforge.xyz` → `10.0.0.70`, and loads it with a valid wildcard cert.
 
-- [ ] T017 ⏳ [US1] Enroll the owner device: `tailscale up --login-server https://headscale.ragnaforge.xyz` (create an `owner` user + key first via `headscale users create owner` / `headscale preauthkeys create --user owner`); confirm the node in `headscale nodes list`. **This is the first live proof the forced-HTTP/1.1 router carries the control handshake** — if it fails, go to T033 (Plan B). (quickstart §1)
+- [X] T017 ⏳ [US1] Enroll the owner device: `tailscale up --login-server https://headscale.ragnaforge.xyz` (create an `owner` user + key first via `headscale users create owner` / `headscale preauthkeys create --user owner`); confirm the node in `headscale nodes list`. **This is the first live proof the forced-HTTP/1.1 router carries the control handshake** — if it fails, go to T033 (Plan B). (quickstart §1)
 - [ ] T018 ⏳ [US1] From the enrolled owner device **on the LAN**, verify split DNS + route: `whoami.ragnaforge.xyz` resolves to `10.0.0.70` and loads over HTTPS; `tailscale status` shows Headscale peers (not `*.ts.net`). (FR-005/FR-007)
 - [ ] T019 ⏳ [US1] Take the owner device **off-LAN** (phone tether); confirm cold-connect tunnel + `curl -I https://whoami.ragnaforge.xyz` = 200 with valid cert in **<30 s** (SC-001), and that **no session depends on Tailscale SaaS** (SC-004).
 - [ ] T020 ⏳ [US1] Force a **relay-only** path (block STUN/UDP on the test network) and confirm the app still loads via embedded DERP (owner-side proof of FR-008 before guests rely on it). (quickstart §2)

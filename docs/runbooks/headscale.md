@@ -115,14 +115,26 @@ reachable before the tunnel exists (no chicken-and-egg).
 
 ## 5. Optional web admin UI
 
-`headscale-ui` (in the compose, `headscale-ui.ragnaforge.xyz`, **LAN/Tailscale-only, never forwarded**)
-is a browser app for minting/expiring keys and viewing nodes without the CLI. It calls the Headscale API
-from the browser: create a key and paste it in the UI:
-```sh
-docker exec headscale headscale apikeys create --expiration 90d
-```
-(Store it as `HEADSCALE_API_KEY` in `.mise.toml` for reference. Delete the `headscale-ui` service if you
-prefer CLI-only.)
+`headscale-ui` (gurucomputing) is a browser app for adding users, minting/expiring keys, and viewing
+nodes without the CLI. Open it at **`https://headscale.ragnaforge.xyz/web`**.
+
+It MUST be served on the **same origin** as the API — Headscale sends no CORS headers, so a separate
+subdomain fails every browser API call (CORS `401` preflight, "API test did not succeed"). Hence it rides
+`headscale.ragnaforge.xyz` under `/web`. In the UI **Settings**:
+
+- **API URL / Headscale URL:** `https://headscale.ragnaforge.xyz` (same origin → no CORS)
+- **API Key:**
+  ```sh
+  docker exec headscale headscale apikeys create --expiration 90d
+  ```
+  (paste the token; store it as `HEADSCALE_API_KEY` in `.mise.toml` for reference; list/revoke with
+  `headscale apikeys list` / `headscale apikeys expire --prefix <prefix>`).
+
+**Not public:** although `/web` is on the internet-facing host, a Traefik `ipAllowList` restricts it to
+`10.0.0.0/24` + `100.64.0.0/10` (LAN + tailnet). The admin UI is never reachable from the internet; only
+the Bearer-key-gated `/api` and the control protocol are public (inherent to Headscale). The UI's router
+reuses the `headscale-h1` TLS options (same-SNI constraint). Delete the `headscale-ui` service for
+CLI-only operation.
 
 ---
 
@@ -143,10 +155,15 @@ Reproducibility drill (SC-008): destroy + redeploy the stack from git, restore t
 
 ## 7. Rollback to Tailscale (kept as fallback)
 
-Tailscale is **still installed** on the Dell; only its session was stopped. To revert the owner path:
+Tailscale is **still installed** on the Dell; the cutover just re-pointed the client at Headscale (via
+`tailscale up --reset --force-reauth --login-server=...`). To revert the owner path you must switch the
+`login-server` BACK — a plain `tailscale up` will NOT change it (`can't change --login-server without
+--force-reauth`):
 ```sh
 sudo tailscale down    # leave Headscale
-sudo tailscale up      # re-point the Dell to Tailscale SaaS — old path restored, no re-provision
+sudo tailscale up --reset --force-reauth --login-server=https://controlplane.tailscale.com \
+                  --advertise-routes=10.0.0.0/24 --hostname=ragnaforge-dell
+# then re-auth against Tailscale SaaS (browser URL, or --authkey $TAILSCALE_AUTHKEY from .mise.toml)
 ```
 To return to Headscale, re-run the §2 step-6 `tailscale up --login-server ...`.
 
