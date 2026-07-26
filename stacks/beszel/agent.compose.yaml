@@ -27,7 +27,7 @@
 
 services:
   beszel-agent:
-    image: henrygd/beszel-agent:0.9.1
+    image: henrygd/beszel-agent:0.18.7
     container_name: beszel-agent
     restart: unless-stopped
     # Linux host networking: real interfaces/metrics, and the agent binds 45876 on the
