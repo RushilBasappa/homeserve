@@ -32,9 +32,9 @@
 # STATE (golden rule → the Dell): the SQLite DB + noise/DERP private keys live on
 # the local `headscale-data` volume. Back it up = back up the whole tailnet.
 #
-# VERSION: pinned to a stable 0.26.x — AVOID 0.27.0 (client-can't-connect
-# regression, juanfont/headscale#2870). Verify/bump at deploy and re-diff
-# config-example.yaml for the pinned tag (research R1; T008).
+# VERSION: pinned to 0.29.2 (config validated via `configtest` on that tag).
+# Historically AVOID 0.27.0 (client-can't-connect regression, juanfont/headscale#2870).
+# Re-diff config-example.yaml and re-run configtest when bumping (research R1; T008).
 
 configs:
   # ---- Headscale server config (non-secret; materialised at /etc/headscale/config.yaml) ----
@@ -77,7 +77,11 @@ configs:
         update_frequency: 24h
 
       disable_check_updates: true
-      ephemeral_node_inactivity_timeout: 30m
+      # 0.29.x removed the flat `ephemeral_node_inactivity_timeout` key — it now
+      # lives under node.ephemeral.inactivity_timeout (validated via configtest).
+      node:
+        ephemeral:
+          inactivity_timeout: 30m
 
       database:
         type: sqlite
@@ -164,7 +168,7 @@ configs:
 
 services:
   headscale:
-    image: headscale/headscale:0.26.1
+    image: headscale/headscale:0.29.2
     container_name: headscale
     restart: unless-stopped
     command: serve
