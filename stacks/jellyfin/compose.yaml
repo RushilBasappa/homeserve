@@ -12,7 +12,7 @@
 
 services:
   jellyfin:
-    image: jellyfin/jellyfin:10.10.7
+    image: jellyfin/jellyfin:10.11.11
     container_name: jellyfin
     # Stable hostname so clients see a consistent server identity. Without it Docker
     # sets the hostname to the random container ID, and every redeploy looks like a
