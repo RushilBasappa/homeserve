@@ -116,7 +116,7 @@ services:
 
   # --- PostgreSQL (the durable state) ------------------------------------------------------
   db:
-    image: docker.io/postgres:15-alpine
+    image: docker.io/postgres:18-alpine
     container_name: wger-db
     restart: unless-stopped
     env_file:
