@@ -132,7 +132,7 @@ one-command rollback proven.
 **Independent Test**: wg-easy stack/UI/port gone and unreachable; `tailscale up` on the Dell restores the
 old owner path in minutes.
 
-- [ ] T026 ⏳ [US3] DestroyStack `wg-easy` in Komodo, then delete `stacks/wg-easy/` and remove its `[[stack]]` decl from `komodo/stacks.toml` and its `wg.ragnaforge.xyz` route. (research R11; contracts/stack-inventory)
+- [X] T026 ⏳ [US3] DestroyStack `wg-easy` in Komodo, then delete `stacks/wg-easy/` and remove its `[[stack]]` decl from `komodo/stacks.toml` and its `wg.ragnaforge.xyz` route. (research R11; contracts/stack-inventory)
 - [ ] T027 ⏳ [US3] Remove the **`51820/udp`** forward from the xFi router; confirm externally it is closed. (SC-006)
 - [ ] T028 ⏳ [US3] Stop the Dell's Tailscale SaaS session (`sudo tailscale down`) **without** uninstalling; confirm the client + tailnet identity remain intact. (FR-003)
 - [ ] T029 ⏳ [US3] **Rollback drill**: `sudo tailscale up` re-points the Dell to Tailscale SaaS and restores the prior owner path in **<10 min** with no re-provision; then return to Headscale (re-run T016). (FR-017; SC-007)
