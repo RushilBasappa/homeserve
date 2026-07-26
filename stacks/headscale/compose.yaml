@@ -157,12 +157,14 @@ configs:
           // Owner: full access to the whole tailnet + LAN.
           { "action": "accept", "src": ["group:owner"], "dst": ["*:*"] },
 
-          // Guests: ONLY the HTTPS front door (Traefik) + DNS. This blocks SSH,
+          // Guests: the HTTPS front door (Traefik :443) + DNS + Plex direct (:32400).
+          // Plex apps (Fire TV etc.) connect DIRECTLY to 10.0.0.70:32400, not through
+          // Traefik's :443 — so guests need :32400 explicitly. Still blocks SSH,
           // Komodo (:9120/:8120), NFS (:2049/:111), AdGuard admin (:3000), etc.
           // LIMIT (research R6): ACLs gate host:port, NOT vhost — a guest reaching
           // :443 can, at L3, reach any vhost Traefik serves; true per-APP scoping
           // is each app's own auth. Documented in docs/runbooks/headscale.md.
-          { "action": "accept", "src": ["group:guests"], "dst": ["10.0.0.0/24:443", "10.0.0.70:53"] },
+          { "action": "accept", "src": ["group:guests"], "dst": ["10.0.0.0/24:443", "10.0.0.70:53", "10.0.0.70:32400"] },
         ],
       }
 
