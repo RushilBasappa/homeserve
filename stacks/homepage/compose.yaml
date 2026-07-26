@@ -40,10 +40,10 @@ configs:
               icon: adguard-home.png
               href: https://adguard.ragnaforge.xyz
               description: Internal DNS + ad-blocking — LAN/Tailscale only
-          - wg-easy:
-              icon: wireguard.png
-              href: https://wg.ragnaforge.xyz
-              description: Family/friends VPN admin — LAN/Tailscale only
+          - Headscale:
+              icon: headscale.png
+              href: https://headscale.ragnaforge.xyz/web
+              description: Self-hosted VPN control plane (owner + family/friends) — admin UI, LAN/Tailscale only
           - Beszel:
               icon: beszel.png
               href: https://beszel.ragnaforge.xyz
