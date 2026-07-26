@@ -1,0 +1,66 @@
+# headplane — modern Headscale web UI (REPLACES the gurucomputing headscale-ui, which
+# can't create pre-auth keys against Headscale 0.29's new API/key format). Headplane is a
+# SERVER-SIDE app: it proxies the Headscale API itself, so there is NO browser CORS — it
+# lives on its own subdomain (no /web same-origin hack needed). Manages nodes, users, and
+# PRE-AUTH KEYS with proper full-key display.
+#
+# LAN/TAILNET-ONLY: :443 is publicly router-forwarded (headscale control plane), so this
+# admin UI is gated by an ipAllowList (LAN 10.0.0.0/24 + tailnet 100.64.0.0/10), same
+# posture as the other admin vhosts.
+#
+# SECRETS via env OVERRIDES (config.yaml is committed to git, so no secrets live in it —
+# Headplane maps HEADPLANE_<SECTION>__<KEY> env vars over the file):
+#   HEADPLANE_SERVER__COOKIE_SECRET  (32 chars)   ← ${HEADPLANE_COOKIE_SECRET}
+#   HEADPLANE_HEADSCALE__API_KEY     (hskey-api-…) ← ${HEADSCALE_API_KEY}
+# Both forwarded via Periphery (mise). `config_path`/docker-integration are SKIPPED for now
+# (they enable in-UI policy/DNS editing + headscale restart; nodes/users/keys work API-only).
+
+configs:
+  headplane-config:
+    content: |
+      server:
+        host: "0.0.0.0"
+        port: 3000
+        # Public URL (Traefik terminates TLS and forwards to :3000).
+        base_url: "https://headplane.ragnaforge.xyz"
+        cookie_secure: true
+        data_path: "/var/lib/headplane"
+      headscale:
+        # Internal control-plane HTTP endpoint (same `traefik` docker network).
+        url: "http://headscale:8080"
+
+services:
+  headplane:
+    image: ghcr.io/tale/headplane:0.7.0
+    container_name: headplane
+    restart: unless-stopped
+    environment:
+      HEADPLANE_CONFIG_PATH: /etc/headplane/config.yaml
+      # 32-char session-cookie signing secret (never committed).
+      HEADPLANE_SERVER__COOKIE_SECRET: ${HEADPLANE_COOKIE_SECRET}
+      # Headscale API key for server-side calls (hskey-api-…; never committed).
+      HEADPLANE_HEADSCALE__API_KEY: ${HEADSCALE_API_KEY}
+    configs:
+      - source: headplane-config
+        target: /etc/headplane/config.yaml
+    volumes:
+      - headplane-data:/var/lib/headplane
+    networks:
+      - traefik
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.headplane.rule=Host(`headplane.ragnaforge.xyz`)"
+      - "traefik.http.routers.headplane.entrypoints=websecure"
+      - "traefik.http.routers.headplane.tls=true"
+      - "traefik.http.routers.headplane.middlewares=headplane-lan"
+      - "traefik.http.middlewares.headplane-lan.ipallowlist.sourcerange=10.0.0.0/24,100.64.0.0/10,127.0.0.1/32"
+      - "traefik.http.services.headplane.loadbalancer.server.port=3000"
+
+volumes:
+  # Local named volume on the Dell (golden rule: state → the Dell).
+  headplane-data:
+
+networks:
+  # Shared external proxy network — for the web UI route AND to reach headscale:8080.
+  traefik:
+    external: true

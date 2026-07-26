@@ -105,6 +105,19 @@ branch = "main"
 file_paths = ["stacks/headscale/compose.yaml"]
 webhook_enabled = false
 
+[[stack]]
+name = "headplane"
+description = "Edge — Headplane web UI for Headscale (nodes/users/pre-auth keys). Replaces headscale-ui (0.29-incompatible). LAN/tailnet-only."
+tags = ["phase-3", "edge", "vpn"]
+
+[stack.config]
+server = "ragnaforge-dell"
+repo = "RushilBasappa/homeserve"
+git_provider = "github.com"
+branch = "main"
+file_paths = ["stacks/headplane/compose.yaml"]
+webhook_enabled = false
+
 # wg-easy — RETIRED 2026-07-26 by specs/011-headscale-vpn (US3/T026): the WireGuard
 # VPN was unreliable on cellular/CGNAT; all remote access consolidated onto the
 # self-hosted `headscale` control plane. Stack destroyed + files deleted; the old

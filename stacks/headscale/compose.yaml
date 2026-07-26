@@ -199,38 +199,9 @@ services:
       - "traefik.http.routers.headscale.tls.options=headscale-h1@file"
       - "traefik.http.services.headscale.loadbalancer.server.port=8080"
 
-  # ---- OPTIONAL admin UI (research R8; T024). Served at https://headscale.ragnaforge.xyz/web.
-  # Static browser UI (gurucomputing) that calls the Headscale API FROM THE BROWSER.
-  # It MUST share the API's origin: Headscale emits NO CORS headers, so hosting the UI
-  # on a separate subdomain makes every browser API call fail the CORS preflight (401,
-  # no Access-Control-*). So it rides the SAME host as the control plane under /web, and
-  # in the UI settings you set the API URL to https://headscale.ragnaforge.xyz (same
-  # origin → no CORS). Delete this service if you prefer CLI-only key management.
-  headscale-ui:
-    image: ghcr.io/gurucomputing/headscale-ui:latest
-    container_name: headscale-ui
-    restart: unless-stopped
-    networks:
-      - traefik
-    labels:
-      # /web on the PUBLIC headscale host (PathPrefix outranks the catch-all control
-      # router). Same host SNI ⇒ it MUST reuse the headscale-h1 TLS options (Traefik
-      # forbids differing TLS options for one SNI). Because this host IS internet-
-      # forwarded, an IP allow-list keeps the admin UI usable ONLY from the LAN
-      # (10.0.0.0/24) and the tailnet (100.64.0.0/10) — never the public internet
-      # (the admin UI must never be public; same posture the old wg-easy admin had).
-      # The Bearer-key-gated /api rides the public host too — that is inherent to
-      # Headscale (the API shares the control-plane origin).
-      - "traefik.enable=true"
-      - "traefik.http.routers.headscale-ui.rule=Host(`headscale.ragnaforge.xyz`) && PathPrefix(`/web`)"
-      - "traefik.http.routers.headscale-ui.entrypoints=websecure"
-      - "traefik.http.routers.headscale-ui.tls=true"
-      - "traefik.http.routers.headscale-ui.tls.options=headscale-h1@file"
-      - "traefik.http.routers.headscale-ui.priority=100"
-      - "traefik.http.routers.headscale-ui.middlewares=headscale-ui-lan"
-      - "traefik.http.middlewares.headscale-ui-lan.ipallowlist.sourcerange=10.0.0.0/24,100.64.0.0/10,127.0.0.1/32"
-      # The gurucomputing image serves via an internal Caddy on :8080 (NOT :80).
-      - "traefik.http.services.headscale-ui.loadbalancer.server.port=8080"
+  # NOTE: the gurucomputing `headscale-ui` was REMOVED — it can't create pre-auth keys
+  # against Headscale 0.29's API/key format. Replaced by `headplane` (stacks/headplane/),
+  # a server-side UI on its own subdomain (headplane.ragnaforge.xyz).
 
 volumes:
   # Local named volume on the Dell (golden rule: control-plane state → the Dell).
