@@ -105,23 +105,10 @@ branch = "main"
 file_paths = ["stacks/headscale/compose.yaml"]
 webhook_enabled = false
 
-# wg-easy — RETIRED by specs/011-headscale-vpn (US3/T026): the WireGuard VPN was
-# unreliable on cellular/CGNAT; all remote access consolidated onto `headscale`.
-# This [[stack]] decl is REMOVED as part of the live decommission (DestroyStack
-# wg-easy first, then delete this block + stacks/wg-easy/). Kept here until the
-# operator runs the US3 cutover so the old path stays declarable for rollback.
-[[stack]]
-name = "wg-easy"
-description = "Phase-3 edge — secondary WireGuard VPN for family/friends; one public port (51820/udp). RETIRING → headscale."
-tags = ["phase-3", "edge", "vpn", "deprecated"]
-
-[stack.config]
-server = "ragnaforge-dell"
-repo = "RushilBasappa/homeserve"
-git_provider = "github.com"
-branch = "main"
-file_paths = ["stacks/wg-easy/compose.yaml"]
-webhook_enabled = false
+# wg-easy — RETIRED 2026-07-26 by specs/011-headscale-vpn (US3/T026): the WireGuard
+# VPN was unreliable on cellular/CGNAT; all remote access consolidated onto the
+# self-hosted `headscale` control plane. Stack destroyed + files deleted; the old
+# 51820/udp router forward is removed on the xFi gateway (T027).
 
 # ============================================================================
 # Phase 5 — Media stack (ARR + Jellyfin/Plex) (research R7/R11; contract
