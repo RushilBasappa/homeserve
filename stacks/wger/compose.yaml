@@ -124,7 +124,9 @@ services:
     environment:
       POSTGRES_PASSWORD: ${WGER_POSTGRES_PASSWORD}
     volumes:
-      - wger-pgdata:/var/lib/postgresql/data
+      # Postgres 18+ stores data in a version-specific subdir and wants the mount at
+      # /var/lib/postgresql (NOT .../data) — mounting .../data makes 18 refuse to start.
+      - wger-pgdata:/var/lib/postgresql
     networks:
       - wger
     healthcheck:
