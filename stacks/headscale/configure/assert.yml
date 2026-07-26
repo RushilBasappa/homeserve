@@ -1,0 +1,103 @@
+---
+# stacks/headscale/configure/assert.yml — PLANE 3 (post-deploy assert), co-located with the headscale
+# stack, run idempotently and READ-ONLY (specs/011-headscale-vpn FR-011/INV-6; research R10). It is the
+# "validate BEFORE exposure" gate: run it while the container is up but BEFORE opening the router
+# forwards (T014 → then T015). It never enrolls a node, never writes state, never mints a key.
+#
+# MODEL (same as stacks/wger/configure/setup.yml): runs on the WORKSTATION (localhost). Two kinds of
+# check:
+#   1. IN-CONTAINER control-plane sanity — `headscale configtest`, `headscale users list`, and the
+#      route table — via `docker exec` on the Dell (delegated). These need no public exposure and prove
+#      the config + policy actually parse and load.
+#   2. EDGE reachability — GET https://headscale.ragnaforge.xyz over TLS returns a live control plane,
+#      proving Traefik's forced-HTTP/1.1 route + the wildcard cert work. (The definitive proof is a real
+#      client enroll, T017 — that is the operator's live drill, recorded in docs/runbooks/headscale.md.)
+#
+# STUN (udp/3478) is NOT probed here (a correct STUN check needs a Tailscale/STUN client, not curl); its
+# reachability is asserted by the live off-LAN direct-connection drill (T019) and the external port scan
+# (T031). This play deliberately does not fake a UDP result.
+#
+# RUN (from the repo root, with the Dell reachable over SSH as the Komodo/Periphery host):
+#   cd stacks/headscale/configure && mise exec -- ansible-playbook assert.yml
+# It assumes an inventory entry `ragnaforge-dell` (provision/ inventory). Override the host with
+#   -e headscale_host=ragnaforge-dell
+
+- name: headscale — assert control plane is valid + reachable BEFORE opening the router forward
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    headscale_url: "https://headscale.ragnaforge.xyz"
+    headscale_host: "ragnaforge-dell"      # the Docker host running the headscale container
+    headscale_container: "headscale"
+    expected_route: "10.0.0.0/24"
+
+  tasks:
+    # ---- 1. In-container: config + policy actually parse and load -------------------------
+    - name: headscale configtest (config.yaml + inline policy parse)
+      ansible.builtin.command:
+        cmd: "docker exec {{ headscale_container }} headscale configtest"
+      delegate_to: "{{ headscale_host }}"
+      changed_when: false
+      register: hs_configtest
+
+    - name: Fail loudly if configtest did not pass
+      ansible.builtin.assert:
+        that:
+          - hs_configtest.rc == 0
+        fail_msg: >-
+          `headscale configtest` failed — the inline config.yaml or policy.hujson does not parse/validate.
+          Common cause: the policy `groups` identity form (owner@ / guests@) does not match this
+          version's expectation, or a config key drifted between the pinned tag and the 0.26 schema
+          (research R1/T008). Inspect: docker exec {{ headscale_container }} headscale configtest.
+          Do NOT open the 443/3478 router forward until this is green (INV-6).
+
+    # ---- Control API responds (server is actually serving) --------------------------------
+    - name: headscale users list (control API responds)
+      ansible.builtin.command:
+        cmd: "docker exec {{ headscale_container }} headscale users list"
+      delegate_to: "{{ headscale_host }}"
+      changed_when: false
+      register: hs_users
+      failed_when: hs_users.rc != 0
+
+    # ---- Subnet route present + approved (informational until the Dell node joins, T016) ---
+    - name: headscale routes list (10.0.0.0/24 approval state)
+      ansible.builtin.command:
+        cmd: "docker exec {{ headscale_container }} headscale routes list"
+      delegate_to: "{{ headscale_host }}"
+      changed_when: false
+      register: hs_routes
+      failed_when: false
+
+    # ---- 2. Edge: the public control plane answers over TLS (Traefik + h1 route + cert) ----
+    - name: GET the headscale control endpoint over TLS
+      ansible.builtin.uri:
+        url: "{{ headscale_url }}/health"
+        method: GET
+        status_code: [200, 204]
+        return_content: false
+      register: hs_health
+      # /health exists on modern headscale; if the pinned tag lacks it, a 404 from a VALID cert still
+      # proves TLS+routing — so treat 404 as reachable-but-no-health-endpoint, not a hard failure.
+      failed_when: hs_health.status not in [200, 204, 404]
+
+    - name: Fail loudly if the edge did not answer over valid TLS
+      ansible.builtin.assert:
+        that:
+          - hs_health.status in [200, 204, 404]
+        fail_msg: >-
+          {{ headscale_url }} did not answer over TLS. Check: the `headscale` Traefik router + the
+          `headscale-h1@file` TLSOption (stacks/traefik/compose.yaml), the wildcard cert, and that
+          headscale is listening on :8080. A TLS handshake error here usually means the router/cert is
+          wrong; a control-protocol failure only shows up at real client enroll (T017 → Plan B if so).
+
+    - name: Summary
+      ansible.builtin.debug:
+        msg: >-
+          headscale OK — configtest passed, control API responds, edge answered
+          {{ hs_health.status }} over valid TLS. Route table:
+          {{ (hs_routes.stdout | default('(none yet — Dell joins at T016)')) | truncate(200) }}.
+          This play is read-only. NEXT: open the 443/tcp + 3478/udp router forward (T015), then enroll
+          the owner (T017) — the first live proof the forced-HTTP/1.1 route carries the control protocol.

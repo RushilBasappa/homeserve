@@ -1,0 +1,225 @@
+# headscale — the SELF-HOSTED Tailscale control plane (specs/011-headscale-vpn;
+# research R1–R11; contracts stack-inventory + remote-access).
+#
+# Replaces BOTH remote-access VPNs: the failing wg-easy (removed, US3) and the
+# owner's dependence on Tailscale's SaaS control plane (Tailscale kept installed
+# but STOPPED as a fast rollback). Remote clients keep the STANDARD Tailscale apps,
+# pointed at https://headscale.ragnaforge.xyz via `--login-server`.
+#
+# THE PUBLIC SURFACE (a deliberate posture change — first time 443 is forwarded):
+#   * 443/tcp  — control plane over TLS (handshake, enroll/login, key/config
+#                validation, control stream) AND the embedded DERP relay. Served
+#                by Traefik (wildcard *.ragnaforge.xyz), routed to headscale:8080.
+#   * 3478/udp — STUN for NAT traversal (direct P2P). Traefik CANNOT proxy UDP, so
+#                it is published DIRECTLY from this container, BOUND TO THE LAN IP
+#                (10.0.0.70), never [::] — no public-IPv6 leak ([[homeserve-ipv6-exposure-xfinity]]).
+#   Router forwards 443/tcp + 3478/udp → 10.0.0.70. Keep Xfinity Typical Security.
+#
+# THE TRAEFIK GOTCHA (research R2 / [[homeserve-headscale-traefik-h2]]): the Tailscale
+# control channel upgrades with a NON-WebSocket `Upgrade: tailscale-control-protocol`
+# header, which Traefik DROPS over HTTP/2 (traefik#12609). Fix: the `headscale`
+# router forces HTTP/1.1 via the `headscale-h1@file` TLSOption (alpnProtocols:
+# ["http/1.1"]) defined in stacks/traefik/compose.yaml. Headscale's own TLS is OFF
+# (Traefik terminates); the `WRN listening without TLS` startup log is BENIGN.
+# Plan B if the live handshake still fails: Traefik TCP/SNI passthrough (see
+# docs/runbooks/headscale.md).
+#
+# CONFIG ships INLINE (top-level `configs:`), NOT a ./config bind — Komodo deploys
+# from a git clone where relative binds don't resolve; editing these needs a
+# container RECREATE (DestroyStack+DeployStack), not just a redeploy
+# ([[homeserve-inline-configs-need-recreate]]).
+#
+# STATE (golden rule → the Dell): the SQLite DB + noise/DERP private keys live on
+# the local `headscale-data` volume. Back it up = back up the whole tailnet.
+#
+# VERSION: pinned to a stable 0.26.x — AVOID 0.27.0 (client-can't-connect
+# regression, juanfont/headscale#2870). Verify/bump at deploy and re-diff
+# config-example.yaml for the pinned tag (research R1; T008).
+
+configs:
+  # ---- Headscale server config (non-secret; materialised at /etc/headscale/config.yaml) ----
+  headscale-config:
+    content: |
+      # Public URL clients dial; resolved via Cloudflare (before any tunnel exists).
+      server_url: https://headscale.ragnaforge.xyz
+      # Plain HTTP inside the container — Traefik terminates TLS on :443.
+      listen_addr: 0.0.0.0:8080
+      # Metrics + gRPC stay on loopback: NEVER published, NEVER forwarded.
+      metrics_listen_addr: 127.0.0.1:9090
+      grpc_listen_addr: 127.0.0.1:50443
+      grpc_allow_insecure: false
+
+      noise:
+        private_key_path: /var/lib/headscale/noise_private.key
+
+      # Tailnet address pools (defaults).
+      prefixes:
+        v4: 100.64.0.0/10
+        v6: fd7a:115c:a1e0::/48
+        allocation: sequential
+
+      # Embedded DERP relay = the always-available fallback when direct P2P fails
+      # (FR-008). urls/paths EMPTY on purpose: rely ONLY on our own embedded relay,
+      # not Tailscale's global DERP map — keeps the fleet fully self-hosted (SC-004).
+      derp:
+        server:
+          enabled: true
+          region_id: 999
+          region_code: "headscale"
+          region_name: "Headscale Embedded DERP (ragnaforge)"
+          # STUN for NAT traversal — published on the LAN IP + router-forwarded.
+          stun_listen_addr: "0.0.0.0:3478"
+          private_key_path: /var/lib/headscale/derp_server_private.key
+          automatically_add_embedded_derp_region: true
+        urls: []
+        paths: []
+        auto_update_enabled: false
+        update_frequency: 24h
+
+      disable_check_updates: true
+      ephemeral_node_inactivity_timeout: 30m
+
+      database:
+        type: sqlite
+        sqlite:
+          path: /var/lib/headscale/db.sqlite
+          write_ahead_log: true
+
+      log:
+        format: text
+        level: info
+
+      # Least-privilege ACLs from the inline policy below (research R6).
+      policy:
+        mode: file
+        path: /etc/headscale/policy.hujson
+
+      dns:
+        # MagicDNS OFF — we want the existing *.ragnaforge.xyz names via AdGuard,
+        # not *.tailnet names (research R4).
+        magic_dns: false
+        # base_domain must be set and must NOT be a parent of server_url's host
+        # (headscale.ragnaforge.xyz) — so it is an unrelated placeholder here.
+        base_domain: tailnet.internal
+        nameservers:
+          global: []
+          # SPLIT DNS: push AdGuard (10.0.0.70) ONLY for ragnaforge.xyz; clients
+          # keep their own resolver for everything else (the WG_DEFAULT_DNS analogue,
+          # split-tunnel style). Remote devices then resolve *.ragnaforge.xyz →
+          # 10.0.0.70 and reach Traefik + apps exactly like on the LAN.
+          split:
+            ragnaforge.xyz:
+              - 10.0.0.70
+        search_domains: []
+        extra_records: []
+
+      # Unix control socket on the writable state volume.
+      unix_socket: /var/lib/headscale/headscale.sock
+      unix_socket_permission: "0770"
+
+  # ---- Access policy (HuJSON; materialised at /etc/headscale/policy.hujson) ----
+  # NOTE (verify at deploy — T014): the identity form used in `groups` must match
+  # what `headscale users list` reports for the pinned version. Headscale policy v2
+  # references LOCAL users as `<username>@`. If `headscale policy check` rejects the
+  # `owner@`/`guests@` form on the pinned tag, switch to the bare `owner`/`guests`
+  # form (or the exact string headscale prints). Users are created at T017/T021:
+  #   headscale users create owner   /   headscale users create guests
+  headscale-policy:
+    content: |
+      {
+        // The Dell subnet-router node is tagged so autoApprovers can approve its route.
+        "tagOwners": {
+          "tag:subnet-router": ["owner@"],
+        },
+
+        "groups": {
+          "group:owner":  ["owner@"],
+          "group:guests": ["guests@"],
+        },
+
+        // The Dell advertises 10.0.0.0/24 (tailscale up --advertise-routes=...);
+        // this auto-approves it so every node reaches 10.0.0.70 like on the LAN.
+        "autoApprovers": {
+          "routes": {
+            "10.0.0.0/24": ["tag:subnet-router"],
+          },
+        },
+
+        "acls": [
+          // Owner: full access to the whole tailnet + LAN.
+          { "action": "accept", "src": ["group:owner"], "dst": ["*:*"] },
+
+          // Guests: ONLY the HTTPS front door (Traefik) + DNS. This blocks SSH,
+          // Komodo (:9120/:8120), NFS (:2049/:111), AdGuard admin (:3000), etc.
+          // LIMIT (research R6): ACLs gate host:port, NOT vhost — a guest reaching
+          // :443 can, at L3, reach any vhost Traefik serves; true per-APP scoping
+          // is each app's own auth. Documented in docs/runbooks/headscale.md.
+          { "action": "accept", "src": ["group:guests"], "dst": ["10.0.0.0/24:443", "10.0.0.70:53"] },
+        ],
+      }
+
+services:
+  headscale:
+    image: headscale/headscale:0.26.1
+    container_name: headscale
+    restart: unless-stopped
+    command: serve
+    ports:
+      # STUN — the ONE UDP port Traefik can't carry. Bound to the LAN IP (never
+      # [::]) and router-forwarded. Control + DERP ride Traefik on :443 instead.
+      - "10.0.0.70:3478:3478/udp"
+    configs:
+      - source: headscale-config
+        target: /etc/headscale/config.yaml
+      - source: headscale-policy
+        target: /etc/headscale/policy.hujson
+    volumes:
+      # DB + noise/DERP private keys + control socket — the whole tailnet's state.
+      - headscale-data:/var/lib/headscale
+    networks:
+      - traefik
+    labels:
+      # --- Traefik: the PUBLIC control plane at headscale.ragnaforge.xyz. Unlike
+      # every other app this IS internet-reachable (443 is router-forwarded). The
+      # `headscale-h1@file` TLSOption forces HTTP/1.1 so the tailscale-control-protocol
+      # upgrade survives Traefik (traefik#12609 / research R2). The embedded DERP
+      # relay is served on the SAME :8080, so it rides this same router. ---
+      - "traefik.enable=true"
+      - "traefik.http.routers.headscale.rule=Host(`headscale.ragnaforge.xyz`)"
+      - "traefik.http.routers.headscale.entrypoints=websecure"
+      - "traefik.http.routers.headscale.tls=true"
+      - "traefik.http.routers.headscale.tls.options=headscale-h1@file"
+      - "traefik.http.services.headscale.loadbalancer.server.port=8080"
+
+  # ---- OPTIONAL admin UI (research R8; T024) — LAN/Tailscale-only, NEVER forwarded.
+  # Static browser UI for the gurucomputing project: it calls the Headscale API
+  # from the BROWSER, where the operator pastes the API URL (https://headscale.ragnaforge.xyz)
+  # + an API key (`headscale apikeys create`, kept in .mise.toml as HEADSCALE_API_KEY
+  # for reference). No server-side secret is consumed by this container. Delete this
+  # service if you prefer CLI-only key management.
+  headscale-ui:
+    image: ghcr.io/gurucomputing/headscale-ui:latest
+    container_name: headscale-ui
+    restart: unless-stopped
+    networks:
+      - traefik
+    labels:
+      # Normal wildcard route (Tailscale IP publicly / 10.0.0.70 via AdGuard) — the
+      # `headscale-ui` name is NOT router-forwarded, so it is reachable only on the
+      # LAN or over the tunnel, never from the public internet (same posture the
+      # old wg-easy admin UI had). Standard HTTP/2 router (no h1 override needed —
+      # only the control protocol needs that).
+      - "traefik.enable=true"
+      - "traefik.http.routers.headscale-ui.rule=Host(`headscale-ui.ragnaforge.xyz`)"
+      - "traefik.http.routers.headscale-ui.entrypoints=websecure"
+      - "traefik.http.routers.headscale-ui.tls=true"
+      - "traefik.http.services.headscale-ui.loadbalancer.server.port=80"
+
+volumes:
+  # Local named volume on the Dell (golden rule: control-plane state → the Dell).
+  headscale-data:
+
+networks:
+  # Shared external proxy network (created once on the Dell) — for the 443 routes.
+  traefik:
+    external: true

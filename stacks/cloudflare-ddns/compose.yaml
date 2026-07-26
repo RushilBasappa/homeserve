@@ -32,8 +32,15 @@ services:
       # content in this setup (sync include_variables=false), and it's not a mise
       # secret — so a literal is the reliable choice. Value tracked for reference
       # in komodo/variables.toml (VPN_HOSTNAME).
-      DOMAINS: "vpn.ragnaforge.xyz"
-      # WireGuard/UDP must NOT go through Cloudflare's proxy.
+      # headscale.ragnaforge.xyz = the SELF-HOSTED control plane's public endpoint
+      # (specs/011-headscale-vpn/T004). It must resolve to the home's current public
+      # IP so external clients can handshake on 443/tcp + STUN on 3478/udp. Replaces
+      # vpn.ragnaforge.xyz (the wg-easy endpoint), retired with wg-easy in US3 — the
+      # favonia image creates the A record if missing and updates it on IP change.
+      # (During the US1→US3 migration you may temporarily list both, comma-separated.)
+      DOMAINS: "headscale.ragnaforge.xyz"
+      # Headscale needs a REAL origin IP (Cloudflare's HTTP proxy is unsupported by
+      # Tailscale clients, and STUN is UDP) — so PROXIED stays false.
       PROXIED: "false"
       # The VPN endpoint is IPv4; skip AAAA to avoid needless IPv6 churn.
       IP6_PROVIDER: none

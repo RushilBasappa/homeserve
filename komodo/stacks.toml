@@ -93,9 +93,27 @@ file_paths = ["stacks/cloudflare-ddns/compose.yaml"]
 webhook_enabled = false
 
 [[stack]]
-name = "wg-easy"
-description = "Phase-3 edge — secondary WireGuard VPN for family/friends; one public port (51820/udp)."
+name = "headscale"
+description = "Phase-3 edge — self-hosted Tailscale control plane (owner + family/friends); PUBLIC 443/tcp (control+DERP) + 3478/udp (STUN). Replaces wg-easy. See specs/011-headscale-vpn."
 tags = ["phase-3", "edge", "vpn"]
+
+[stack.config]
+server = "ragnaforge-dell"
+repo = "RushilBasappa/homeserve"
+git_provider = "github.com"
+branch = "main"
+file_paths = ["stacks/headscale/compose.yaml"]
+webhook_enabled = false
+
+# wg-easy — RETIRED by specs/011-headscale-vpn (US3/T026): the WireGuard VPN was
+# unreliable on cellular/CGNAT; all remote access consolidated onto `headscale`.
+# This [[stack]] decl is REMOVED as part of the live decommission (DestroyStack
+# wg-easy first, then delete this block + stacks/wg-easy/). Kept here until the
+# operator runs the US3 cutover so the old path stays declarable for rollback.
+[[stack]]
+name = "wg-easy"
+description = "Phase-3 edge — secondary WireGuard VPN for family/friends; one public port (51820/udp). RETIRING → headscale."
+tags = ["phase-3", "edge", "vpn", "deprecated"]
 
 [stack.config]
 server = "ragnaforge-dell"

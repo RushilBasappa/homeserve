@@ -32,6 +32,16 @@ configs:
                 main: "ragnaforge.xyz"
                 sans:
                   - "*.ragnaforge.xyz"
+        # TLSOption for the `headscale` router (specs/011-headscale-vpn, research R2 /
+        # [[homeserve-headscale-traefik-h2]]). Forcing ALPN to http/1.1 removes h2 for
+        # THAT host only, so Headscale's non-WebSocket `Upgrade: tailscale-control-protocol`
+        # survives Traefik (traefik#12609 drops it over HTTP/2). Referenced by the
+        # headscale container label `tls.options=headscale-h1@file`. Every other vhost
+        # keeps HTTP/2 (they don't touch this option).
+        options:
+          headscale-h1:
+            alpnProtocols:
+              - http/1.1
 # traefik-media-helpers file-routes (byparr/cleanuparr/huntarr) REMOVED 2026-07-20 —
 # the media-helpers Mac stack was deleted. Re-add a file config here if it ever returns.
 

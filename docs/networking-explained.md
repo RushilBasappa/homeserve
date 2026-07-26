@@ -28,10 +28,10 @@ network is **`10.0.0.70`**.
 | **AdGuard** | **DNS** — turns names into IP addresses | The **contacts app** ("who is X? here's their number") |
 | **Traefik** | **Reverse proxy** — one front door for all apps | The **receptionist** who reads the visitor's name tag and walks them to the right office |
 | **The wildcard certificate** | Proof the site is really yours | A **tamper-proof ID badge** the browser inspects |
-| **Tailscale** | Private VPN for **you** (the owner) | Your **personal keycard** to the building, from anywhere |
-| **wg-easy** | Private VPN for **family/friends** | A **guest keycard** you hand out |
+| **Headscale** | Our **own** private-VPN control server on the Dell — everyone (you *and* family) uses it, via the standard Tailscale app | The **security desk** that issues keycards and remembers who's allowed where |
+| **Tailscale (the app)** | The client everyone installs; pointed at *our* Headscale, not Tailscale's cloud | The **keycard reader** — same reader for you and for guests |
 | **DDNS** | Keeps your home's public address up to date | Auto-updating the **street sign** when the city renumbers your house |
-| **Port forward (UDP 51820)** | The one hole in your home router | A single **guarded door** in the building's outer wall |
+| **Port forwards (TCP 443 + UDP 3478)** | The two holes in your home router that let the security desk work from outside | Two **guarded doors** in the building's outer wall |
 
 Key point: **AdGuard, Traefik, and every app all live on the Dell.** So almost
 everything is really "how do I get a request to the Dell, and what does the Dell do
@@ -121,14 +121,17 @@ flowchart LR
 
 ---
 
-## Scenario B — you're remote, on Tailscale (the owner's path)
+## Scenario B — you're remote, on the VPN (the owner's path)
 
 Now you're at a coffee shop. Your laptop is **not** on the home network, so
-`10.0.0.70` means nothing to it — that's a *private* address. This is what
-**Tailscale** solves.
+`10.0.0.70` means nothing to it — that's a *private* address. This is what the
+**VPN** solves.
 
-Tailscale builds a private encrypted tunnel between your devices and the Dell. But
-by itself Tailscale only connects the *Tailscale devices* to each other. To let
+You still use the **Tailscale app** — but it now talks to **our own Headscale**
+security desk on the Dell (via `--login-server https://headscale.ragnaforge.xyz`),
+**not** Tailscale's cloud. It builds a private encrypted tunnel between your devices
+and the Dell. But by itself the VPN only connects the *VPN devices* to each other.
+To let
 your laptop reach the whole home network (`10.0.0.0/24`, including `10.0.0.70`), the
 Dell **advertises a subnet route** and you **approved it** — that turns the Dell
 into a gateway onto the home LAN. (See "Why did I approve the route?" below.)
@@ -147,93 +150,109 @@ flowchart LR
 ```
 
 **In words:** same 3-step rule. The *only* difference from Scenario A is **Step 2**:
-your laptop can't touch `10.0.0.70` directly, so Tailscale carries the request
-through its tunnel to the Dell, and the approved subnet route lets it land on the
-home LAN. No open ports on your router are involved — Tailscale handles its own
-connectivity behind the scenes.
+your laptop can't touch `10.0.0.70` directly, so the VPN carries the request through
+its tunnel to the Dell, and the approved subnet route lets it land on the home LAN.
+Getting the tunnel *up* is what the two open ports are for — the security desk
+(Headscale) does the introductions on **443**, and **3478** helps your laptop and
+the Dell find a direct path (more on both below).
 
 > **What IP did the browser get?** Still `10.0.0.70` — but it reached it *through
-> the Tailscale tunnel* instead of directly.
+> the VPN tunnel* instead of directly.
 >
-> **A shortcut for the curious:** there's also a public DNS record that points
-> `*.ragnaforge.xyz` at the Dell's *Tailscale* address (`100.76.173.73`). So even a
-> Tailscale device that isn't using AdGuard can find the Dell over the tunnel. Same
-> destination, slightly different road.
+> **Self-hosted, on purpose:** the coordination now runs on *our* Headscale, so the
+> tunnel doesn't depend on Tailscale's cloud. (The old Tailscale-cloud login is kept
+> installed but switched off, as a one-command fallback.)
 
 ---
 
-## Scenario C — family/friend on the wg-easy VPN
+## Scenario C — family/friend on the VPN
 
-Your non-technical cousin can't be expected to set up Tailscale. So they get
-**wg-easy**: you send them a small config file (or a QR code), they tap "connect,"
-and they're in. This is the **only** path that involves opening a door to the
-public internet.
+Your non-technical cousin uses the **same VPN you do** — the standard Tailscale app,
+pointed at *our* Headscale. You send them **one enrollment key**; in the app they
+choose "use a custom server" (`https://headscale.ragnaforge.xyz`), paste the key,
+and they're in. They're a **guest**, so the security desk only lets them reach the
+apps — not the admin panels.
 
 ```mermaid
 flowchart LR
     b["📱 Cousin's phone<br/>(cellular, far away)"]
-    ddns["vpn.ragnaforge.xyz<br/>= 76.102.108.83<br/>(kept current by DDNS)"]
-    door["xFi Router<br/>open door: UDP 51820"]
-    wg["wg-easy on the Dell"]
-    dns["AdGuard 10.0.0.70<br/>(pushed as their DNS)"]
+    ddns["headscale.ragnaforge.xyz<br/>= 76.102.108.83<br/>(kept current by DDNS)"]
+    door["xFi Router<br/>open doors: TCP 443 + UDP 3478"]
+    hs["Headscale on the Dell<br/>(the security desk)"]
+    dns["AdGuard 10.0.0.70<br/>(pushed as their DNS for *.ragnaforge.xyz)"]
     tr["Traefik 10.0.0.70:443"]
-    b -- "1 . dial vpn.ragnaforge.xyz" --> ddns
+    b -- "1 . reach headscale.ragnaforge.xyz" --> ddns
     ddns -- "-> your home's public IP" --> door
-    door -- "2 . only UDP 51820 is let in" --> wg
-    wg -- "3 . tunnel up. use 10.0.0.70 for DNS,<br/>route 10.0.0.x through me" --> b
+    door -- "2 . 443 = introductions, 3478 = find a direct path" --> hs
+    hs -- "3 . tunnel up. use 10.0.0.70 for *.ragnaforge.xyz,<br/>route 10.0.0.x through the Dell" --> b
     b -- "4 . who is whoami? -> 10.0.0.70 -> connect" --> dns
     dns --> tr
 ```
 
 **In words:**
-1. The phone dials `vpn.ragnaforge.xyz`. That name points at your home's **public
-   IP** (`76.102.108.83`), kept accurate by **DDNS** (your home IP changes over
-   time; DDNS updates the record so the name always finds you).
-2. The request hits your router. The router blocks everything **except UDP 51820**,
-   which it forwards to wg-easy on the Dell.
-3. wg-easy builds the tunnel and *pushes two settings* to the phone: "use
-   `10.0.0.70` as your DNS" and "send anything for `10.0.0.x` through this tunnel."
-4. Now the phone behaves exactly like a home device: asks AdGuard, gets
-   `10.0.0.70`, reaches it through the tunnel, Traefik serves the app.
+1. The app reaches `headscale.ragnaforge.xyz`. That name points at your home's
+   **public IP** (`76.102.108.83`), kept accurate by **DDNS** (your home IP changes
+   over time; DDNS updates the record so the name always finds you).
+2. The request hits your router, which forwards **443** (the security desk does the
+   cryptographic introductions and, if needed, relays traffic) and **3478** (helps
+   the phone and the Dell punch a **direct** path so traffic doesn't have to be
+   relayed). Everything else stays sealed.
+3. Once introduced, the tunnel comes up and Headscale *pushes two settings* to the
+   phone: "use `10.0.0.70` as your DNS **for `*.ragnaforge.xyz`**" and "send anything
+   for `10.0.0.x` through the tunnel."
+4. Now the phone behaves like a home device: asks AdGuard, gets `10.0.0.70`, reaches
+   it through the tunnel, Traefik serves the app — reliably, even on cellular.
 
-> **What IP did the browser get?** `10.0.0.70` again — reached through the WireGuard
-> tunnel. The public IP (`76.102.108.83`) was only used to *find the front door*;
-> once inside, it's the same `10.0.0.70` as everyone else.
+> **What IP did the browser get?** `10.0.0.70` again — reached through the tunnel.
+> The public IP was only used to *find the security desk*; once inside, it's the same
+> `10.0.0.70` as everyone else.
+>
+> **Why the switch from the old wg-easy?** WireGuard-on-one-UDP-port kept failing on
+> cellular/carrier networks. The VPN can now **fall back to relaying over 443** when a
+> direct path is blocked, so "it just connects" — the whole reason for the change.
 
 ---
 
-## Why two VPNs?
+## One VPN, two roles
 
-They serve two different kinds of people:
+Everyone is now on **one** system (Headscale + the Tailscale app). The difference is
+just **what the security desk lets you reach**:
 
-| | **Tailscale** | **wg-easy** |
+| | **You (owner)** | **Family / friends (guests)** |
 |---|---|---|
-| For | **You** (the operator) | **Family / friends** |
-| Setup | Install app, log in with your account | Tap-to-import a `.conf` file / QR |
-| Open port needed? | **No** (Tailscale is clever about connectivity) | **Yes** — UDP 51820 |
-| Best for | Full admin access to everything | Simple "just let me reach the apps" |
+| App | Tailscale app → our Headscale | Tailscale app → our Headscale |
+| Setup | Log in / enroll your device | Paste one key, pick "custom server" |
+| Can reach | **Everything** (apps + admin) | **Only the apps** (`:443`) — not SSH, not admin panels |
+| Onboarding | One-time enroll | One key you send; single-use, expires |
 
-You *could* put family on Tailscale too, but it needs accounts and app installs —
-too much for a non-technical relative. wg-easy trades one open port for
-grandma-friendly onboarding.
+The old split (Tailscale for you, wg-easy for family) is gone. One control server,
+two permission levels — simpler and more reliable.
 
 ---
 
-## Why is only ONE port open — and why UDP 51820?
+## Which ports are open — and why 443 + 3478?
 
 Your home router is a wall between your network and the internet. **By default,
-nothing from outside can get in.** That's good.
+nothing from outside can get in.** That's good. The VPN needs exactly **two** doors:
 
-To let family's WireGuard reach wg-easy, you open **exactly one door**: **UDP port
-51820** (WireGuard's language). Everything else stays sealed:
+- **TCP 443** — the security desk (Headscale). Every device that wants to join dials
+  this to get introduced, prove its key, and — if a direct path can't be built — have
+  its traffic **relayed** here. It rides the same `443` as the apps, told apart by
+  name, behind the same valid certificate.
+- **UDP 3478** — "STUN," a helper that lets two devices behind home routers discover a
+  **direct** path to each other. Without it, everything still works but is *relayed*
+  through the Dell (slower). With it, most connections go direct.
+
+Everything else stays sealed:
 
 - Your apps, the dashboard, AdGuard, the admin panels — **none** are reachable from
-  the internet. They're only on the LAN and the VPNs.
-- We proved this with a port scan: from outside, **only UDP 51820 answers**.
+  the internet. Guests on the VPN only get `:443`; admin stuff is owner-only.
+- A port scan from outside should answer on **only 443/tcp + 3478/udp** — nothing else.
 
-Why is that safe? Because WireGuard on that port is **silent to strangers** — it
-doesn't even reply unless you present a valid cryptographic key. An attacker
-scanning your IP essentially sees nothing.
+> **Note on 443:** this is the *first* service we deliberately expose on the internet
+> (the old design forwarded only one UDP port). It's safe because the only thing on
+> public 443 is the Headscale desk behind a valid certificate, and the router firewall
+> stays on its strict default so nothing leaks on IPv6.
 
 ---
 
@@ -263,8 +282,8 @@ padlock. No warning.
 flowchart TB
     q{"Where are you?"}
     q -- "Home WiFi" --> a["Reach 10.0.0.70 directly"]
-    q -- "You, remote" --> b["Tailscale tunnel<br/>+ subnet route"]
-    q -- "Family, remote" --> c["Dial vpn.ragnaforge.xyz<br/>-> public IP -> UDP 51820<br/>-> wg-easy tunnel"]
+    q -- "You, remote" --> b["VPN tunnel (Headscale)<br/>+ subnet route"]
+    q -- "Family, remote" --> c["Reach headscale.ragnaforge.xyz<br/>-> public IP -> 443 (+3478)<br/>-> VPN tunnel (guest)"]
     a --> c2
     b --> c2
     c --> c2
@@ -287,8 +306,14 @@ Three different roads, **one destination** (`10.0.0.70`), **one receptionist**
 - **CGNAT** — when your ISP *doesn't* give you a real public IP (shares one among
   many homes). It would have blocked the open-port path — we checked, and you have
   a real public IP, so you're fine.
-- **Port** — a numbered "channel" on a device (443 = HTTPS, 53 = DNS, 51820 =
-  WireGuard). Opening a port on the router = allowing that one channel in.
+- **Port** — a numbered "channel" on a device (443 = HTTPS / the VPN control desk,
+  53 = DNS, 3478 = STUN / direct-path helper). Opening a port on the router =
+  allowing that one channel in.
+- **Headscale** — our self-hosted copy of Tailscale's coordination server: the
+  "security desk" that enrolls devices and enforces who reaches what. Clients are the
+  normal Tailscale apps, just pointed at it.
+- **STUN / DERP** — STUN (UDP 3478) helps two devices find a **direct** path; DERP is
+  the **relay** fallback (over 443) used when a direct path can't be made.
 - **VPN / tunnel** — an encrypted private path that makes a faraway device behave
   as if it's on your home network.
 - **Reverse proxy** — one entry point (Traefik) that routes to many apps by name.

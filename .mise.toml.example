@@ -78,6 +78,15 @@ KOMODO_API_SECRET     = "changeme-komodo-api-secret"
 # compose file — here in .mise.toml it is a plain string, so paste it verbatim.
 WG_EASY_PASSWORD_HASH = "changeme-wg-easy-bcrypt-hash"
 
+# Headscale API key — ONLY for the optional web admin UI (stacks/headscale, US2/T024).
+# It is NOT consumed by any container env: the gurucomputing headscale-ui is a static
+# browser app where you paste this key at runtime. Generate it AFTER the control plane
+# is up:  docker exec headscale headscale apikeys create --expiration 90d
+# Kept here so the runbook can reference ${HEADSCALE_API_KEY} without printing a real
+# value into a tracked file. Skip entirely if you manage keys via the CLI.
+# (specs/011-headscale-vpn — replaces the retiring wg-easy/Tailscale-SaaS remote access.)
+HEADSCALE_API_KEY = "changeme-headscale-api-key"
+
 # AdGuard Home admin password. AdGuard stores its own bcrypt hash in AdGuardHome.yaml
 # (set on first-run wizard or seeded from config); this value is the plaintext you
 # log in with. Keep it here so the runbook can reference ${ADGUARD_ADMIN_PASSWORD}
