@@ -58,9 +58,13 @@ configs:
         v6: fd7a:115c:a1e0::/48
         allocation: sequential
 
-      # Embedded DERP relay = the always-available fallback when direct P2P fails
-      # (FR-008). urls/paths EMPTY on purpose: rely ONLY on our own embedded relay,
-      # not Tailscale's global DERP map — keeps the fleet fully self-hosted (SC-004).
+      # DERP = NAT-traversal help + relay fallback when a direct P2P link can't form.
+      # We use BOTH: our own embedded relay (region 999, on the Dell) AND Tailscale's
+      # GLOBAL public DERP fleet. The global map is what made Tailscale "just work"
+      # remotely — those relays are free to use (they only pass encrypted bytes; no
+      # Tailscale account needed) and the control plane stays fully self-hosted.
+      # (Was urls:[] embedded-only — that bottlenecked remote relay through home upload
+      # + the Dell CPU and hurt NAT traversal; re-added the global map to fix it.)
       derp:
         server:
           enabled: true
@@ -71,9 +75,10 @@ configs:
           stun_listen_addr: "0.0.0.0:3478"
           private_key_path: /var/lib/headscale/derp_server_private.key
           automatically_add_embedded_derp_region: true
-        urls: []
+        urls:
+          - https://controlplane.tailscale.com/derpmap/default
         paths: []
-        auto_update_enabled: false
+        auto_update_enabled: true
         update_frequency: 24h
 
       disable_check_updates: true
