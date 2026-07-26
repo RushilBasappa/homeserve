@@ -14,6 +14,11 @@ services:
   jellyfin:
     image: jellyfin/jellyfin:10.10.7
     container_name: jellyfin
+    # Stable hostname so clients see a consistent server identity. Without it Docker
+    # sets the hostname to the random container ID, and every redeploy looks like a
+    # BRAND-NEW server in the client's "Select Server" list (accumulating dead hex-ID
+    # entries). Jellyfin also reports this as its machine name when no Server Name is set.
+    hostname: ragnaserve
     restart: unless-stopped
     devices:
       # Intel iGPU → QuickSync HW transcode (research R1). Same device Plex uses.
