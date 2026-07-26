@@ -18,7 +18,7 @@
 
 services:
   actual:
-    image: actualbudget/actual-server:26.7.0-alpine
+    image: actualbudget/actual-server:26.7.0
     container_name: actual
     restart: unless-stopped
     volumes:
@@ -28,7 +28,13 @@ services:
     healthcheck:
       # No official /health endpoint — a root 200 is the practical liveness check (research R2).
       # The image is Node-based, so `node -e` is guaranteed present.
-      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:5006',r=>process.exit(r.statusCode<500?0:1)).on('error',()=>process.exit(1))"]
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "require('http').get('http://127.0.0.1:5006',r=>process.exit(r.statusCode<500?0:1)).on('error',()=>process.exit(1))",
+        ]
       interval: 30s
       timeout: 5s
       retries: 3
