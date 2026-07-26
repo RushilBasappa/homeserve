@@ -110,6 +110,19 @@ webhook_enabled = false
 # self-hosted `headscale` control plane. Stack destroyed + files deleted; the old
 # 51820/udp router forward is removed on the xFi gateway (T027).
 
+[[stack]]
+name = "wud"
+description = "Ops — What's Up Docker: image-update dashboard (notify-only; flags stacks with a newer tag). LAN/tailnet-only."
+tags = ["ops", "tools"]
+
+[stack.config]
+server = "ragnaforge-dell"
+repo = "RushilBasappa/homeserve"
+git_provider = "github.com"
+branch = "main"
+file_paths = ["stacks/wud/compose.yaml"]
+webhook_enabled = false
+
 # ============================================================================
 # Phase 5 — Media stack (ARR + Jellyfin/Plex) (research R7/R11; contract
 # stack-inventory). Every STATEFUL stack is pinned to ragnaforge-dell (library

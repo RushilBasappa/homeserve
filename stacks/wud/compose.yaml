@@ -1,0 +1,53 @@
+# wud — What's Up Docker: the image-UPDATE DASHBOARD (recommended in the headscale
+# migration follow-up). Watches every running container via the Docker socket and
+# flags which ones have a newer tag available (semver-aware, e.g. headscale
+# 0.26.1 → 0.29.2), with a small web UI + optional triggers.
+#
+# NOTIFY-ONLY — it NEVER pulls or restarts anything. Upgrades stay the house way: bump
+# the pinned tag in git → Komodo DeployStack (reproducible-from-git; NOT Watchtower-style
+# auto-update, which would run an image not declared in the repo).
+#
+# READ-ONLY Docker socket: WUD only READS container/image metadata; it cannot control
+# Docker (no start/stop/pull). No repo/host binds, minimal surface.
+#
+# LAN/TAILNET-ONLY: since headscale made :443 publicly router-forwarded, every Traefik
+# vhost is reachable from the internet by Host header — so this admin dashboard is gated
+# by an ipAllowList (10.0.0.0/24 LAN + 100.64.0.0/10 tailnet), same posture as headscale-ui.
+# (Worth applying the same gate to the other admin vhosts — see docs/runbooks/headscale.md.)
+
+services:
+  wud:
+    image: ghcr.io/getwud/wud:8.3.0
+    container_name: wud
+    restart: unless-stopped
+    environment:
+      TZ: America/Los_Angeles
+      # Poll the local Docker host daily at 06:00 (all running containers watched by default).
+      WUD_WATCHER_LOCAL_CRON: "0 6 * * *"
+      # Human-readable logs (match the fleet).
+      WUD_LOG_FORMAT: text
+    volumes:
+      # READ-ONLY — metadata only; WUD cannot act on containers.
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      # Small state store (reviewed/ignored flags) survives restarts.
+      - wud-store:/store
+    networks:
+      - traefik
+    labels:
+      # wud.ragnaforge.xyz — LAN/tailnet only (ipAllowList), served on WUD's :3000.
+      - "traefik.enable=true"
+      - "traefik.http.routers.wud.rule=Host(`wud.ragnaforge.xyz`)"
+      - "traefik.http.routers.wud.entrypoints=websecure"
+      - "traefik.http.routers.wud.tls=true"
+      - "traefik.http.routers.wud.middlewares=wud-lan"
+      - "traefik.http.middlewares.wud-lan.ipallowlist.sourcerange=10.0.0.0/24,100.64.0.0/10,127.0.0.1/32"
+      - "traefik.http.services.wud.loadbalancer.server.port=3000"
+
+volumes:
+  # Local named volume on the Dell (golden rule: state → the Dell).
+  wud-store:
+
+networks:
+  # Shared external proxy network (created once on the Dell) — for the web UI route.
+  traefik:
+    external: true

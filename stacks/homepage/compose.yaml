@@ -48,6 +48,10 @@ configs:
               icon: beszel.png
               href: https://beszel.ragnaforge.xyz
               description: Fleet metrics — CPU/RAM/disk/temps + per-container (dashboards only)
+          - WUD:
+              icon: whats-up-docker.png
+              href: https://wud.ragnaforge.xyz
+              description: Container image-update tracker — flags stacks with a newer tag (LAN/Tailscale only)
       - Apps:
           - Vaultwarden:
               icon: vaultwarden.png
