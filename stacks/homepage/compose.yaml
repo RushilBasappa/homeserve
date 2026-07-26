@@ -42,7 +42,7 @@ configs:
               description: Internal DNS + ad-blocking — LAN/Tailscale only
           - Headscale:
               icon: headscale.png
-              href: https://headplane.ragnaforge.xyz
+              href: https://headplane.ragnaforge.xyz/admin
               description: Self-hosted VPN control plane (owner + family/friends) — Headplane admin UI, LAN/Tailscale only
           - Beszel:
               icon: beszel.png
