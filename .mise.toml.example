@@ -87,6 +87,12 @@ WG_EASY_PASSWORD_HASH = "changeme-wg-easy-bcrypt-hash"
 # (specs/011-headscale-vpn — replaces the retiring wg-easy/Tailscale-SaaS remote access.)
 HEADSCALE_API_KEY = "changeme-headscale-api-key"
 
+# GitHub PAT for the self-hosted Renovate (stacks/renovate) to open image tag-bump
+# PRs against RushilBasappa/homeserve. Create a FINE-GRAINED token scoped to this one
+# repo with: Contents = Read and write, Pull requests = Read and write (a classic
+# token with the `repo` scope also works). Forwarded to Periphery as ${RENOVATE_TOKEN}.
+RENOVATE_TOKEN = "changeme-github-pat-for-renovate"
+
 # AdGuard Home admin password. AdGuard stores its own bcrypt hash in AdGuardHome.yaml
 # (set on first-run wizard or seeded from config); this value is the plaintext you
 # log in with. Keep it here so the runbook can reference ${ADGUARD_ADMIN_PASSWORD}

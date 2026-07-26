@@ -123,6 +123,19 @@ branch = "main"
 file_paths = ["stacks/wud/compose.yaml"]
 webhook_enabled = false
 
+[[stack]]
+name = "renovate"
+description = "Ops — self-hosted Renovate: opens PRs bumping pinned image tags in the repo's compose files. Needs RENOVATE_TOKEN (GitHub PAT). Batch job (no route/port)."
+tags = ["ops", "tools"]
+
+[stack.config]
+server = "ragnaforge-dell"
+repo = "RushilBasappa/homeserve"
+git_provider = "github.com"
+branch = "main"
+file_paths = ["stacks/renovate/compose.yaml"]
+webhook_enabled = false
+
 # ============================================================================
 # Phase 5 — Media stack (ARR + Jellyfin/Plex) (research R7/R11; contract
 # stack-inventory). Every STATEFUL stack is pinned to ragnaforge-dell (library

@@ -1,0 +1,51 @@
+# renovate — self-hosted Renovate: opens PRs that bump the pinned image tags in this
+# repo's compose files (and stacks/hermit/Dockerfile), so upgrades stay the house way —
+# review a PR → merge → Komodo deploys. Complements WUD (WUD = dashboard/notify; Renovate
+# = the actual git tag-bump PRs). Config it applies to the repo lives in /renovate.json.
+#
+# Renovate is a BATCH job (scan → open PRs → exit), NOT a daemon and NOT a web service —
+# so there is NO Traefik route, NO port, NO Homepage tile. This container just runs it on
+# a loop (once, then every RENOVATE_RUN_INTERVAL). The entrypoint execs our command and
+# keeps `renovate` on PATH (verified).
+#
+# LEAST PRIVILEGE: no Docker socket, no repo/host binds. Renovate only needs the GitHub
+# token + network to query registries. The token is the ONLY secret (a GitHub PAT with
+# Contents:RW + Pull-requests:RW on RushilBasappa/homeserve), from mise → Periphery env.
+#
+# IMAGE: pinned to the major tag `43` on purpose — Renovate ships many releases per DAY,
+# so a precise pin would be stale instantly and WUD would nag; the project recommends the
+# major tag. (This is the one intentional exception to the precise-pin convention.)
+
+services:
+  renovate:
+    image: renovate/renovate:43
+    container_name: renovate
+    restart: unless-stopped
+    environment:
+      TZ: America/Los_Angeles
+      LOG_LEVEL: info
+      RENOVATE_PLATFORM: github
+      # The GitHub PAT — the ONLY secret; resolved from the Periphery env (mise). Never committed.
+      RENOVATE_TOKEN: ${RENOVATE_TOKEN}
+      # Only this repo; do not auto-discover every repo the token can see.
+      RENOVATE_AUTODISCOVER: "false"
+      RENOVATE_REPOSITORIES: RushilBasappa/homeserve
+      # renovate.json is committed at the repo root, so skip the onboarding PR.
+      RENOVATE_ONBOARDING: "false"
+      RENOVATE_REQUIRE_CONFIG: required
+      # Seconds between runs (default 24h). Renovate's own `schedule` in renovate.json
+      # still gates WHEN PRs are actually raised (weekday early mornings).
+      RENOVATE_RUN_INTERVAL: "86400"
+    # The image entrypoint execs this; `renovate` is on PATH. Run once, then loop.
+    command:
+      - bash
+      - -c
+      - |
+        while true; do
+          echo "[renovate-runner] run @ $(date -u)";
+          renovate || echo "[renovate-runner] renovate exited non-zero (see logs above)";
+          echo "[renovate-runner] sleeping ${RENOVATE_RUN_INTERVAL:-86400}s";
+          sleep "${RENOVATE_RUN_INTERVAL:-86400}";
+        done
+    # No networks block needed — default bridge gives outbound to GitHub + registries.
+    # (Deliberately NOT on the `traefik` network: nothing to route.)

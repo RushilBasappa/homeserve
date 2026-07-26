@@ -1,0 +1,25 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    ":dependencyDashboard"
+  ],
+  "timezone": "America/Los_Angeles",
+  "schedule": ["after 3am and before 7am every weekday"],
+  "prConcurrentLimit": 5,
+  "labels": ["dependencies"],
+  "packageRules": [
+    {
+      "description": "Group minor/patch container-image bumps into one PR; majors get their own PR for review.",
+      "matchManagers": ["docker-compose", "dockerfile"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "container images (minor/patch)"
+    },
+    {
+      "description": "Flag major container-image bumps clearly (they may need a config migration, e.g. headscale 0.26->0.29).",
+      "matchManagers": ["docker-compose", "dockerfile"],
+      "matchUpdateTypes": ["major"],
+      "labels": ["dependencies", "container-major"]
+    }
+  ]
+}

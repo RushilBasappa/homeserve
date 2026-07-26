@@ -46,6 +46,8 @@ services:
       WHOAMI_TEST_SECRET: ${WHOAMI_TEST_SECRET}
       # Phase 3 (edge): Traefik DNS-01 + Cloudflare DDNS.
       CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN}
+      # Ops (renovate): GitHub PAT the self-hosted Renovate uses to open image tag-bump PRs.
+      RENOVATE_TOKEN: ${RENOVATE_TOKEN}
       # Phase 3 (edge): wg-easy admin bcrypt hash.
       WG_EASY_PASSWORD_HASH: ${WG_EASY_PASSWORD_HASH}
       # --- Phase 5 (media): secrets the arr / jellystat / plex stacks reference as
