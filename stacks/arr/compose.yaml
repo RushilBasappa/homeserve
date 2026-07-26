@@ -32,7 +32,7 @@
 services:
   # --- Proton egress + killswitch (the tunnel every torrent rides) -------------
   gluetun:
-    image: qmcgaw/gluetun:v3.40.0
+    image: qmcgaw/gluetun:v3.41.1
     container_name: gluetun
     restart: unless-stopped
     cap_add:
@@ -98,7 +98,7 @@ services:
 
   # --- Indexer manager (native app-sync propagates indexers to the PVRs) -------
   prowlarr:
-    image: lscr.io/linuxserver/prowlarr:2.4.0
+    image: lscr.io/linuxserver/prowlarr:2.5.2
     container_name: prowlarr
     restart: unless-stopped
     environment:
@@ -195,7 +195,7 @@ services:
 
   # --- Archive extraction (no UI; talks to the PVRs on the arr network) --------
   unpackerr:
-    image: golift/unpackerr:0.14.5
+    image: golift/unpackerr:0.15.2
     container_name: unpackerr
     restart: unless-stopped
     environment:
