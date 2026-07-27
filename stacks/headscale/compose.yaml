@@ -169,7 +169,19 @@ configs:
           // LIMIT (research R6): ACLs gate host:port, NOT vhost — a guest reaching
           // :443 can, at L3, reach any vhost Traefik serves; true per-APP scoping
           // is each app's own auth. Documented in docs/runbooks/headscale.md.
-          { "action": "accept", "src": ["group:guests"], "dst": ["10.0.0.0/24:443", "10.0.0.70:53", "10.0.0.70:32400"] },
+          //
+          // SUBNET-COLLISION FIX ([[homeserve-domain-sni-blocked]] follow-up): a guest
+          // whose OWN LAN is also 10.0.0.0/24 (Xfinity's default!) can't reach services
+          // via the 10.0.0.x subnet route — their local NIC wins over the tailnet route.
+          // So the public *.ragnaforge.xyz wildcard resolves to the Dell's TAILNET IP
+          // (100.64.0.1) instead of 10.0.0.70, and guests reach it via the subnet-router
+          // node's own tailnet address. `tag:subnet-router` is IP-stable (the same tag
+          // autoApprovers uses for the 10.0.0.0/24 route). Traefik publishes 443 on
+          // 0.0.0.0 so it answers on that tailnet IP; Plex is bound to 10.0.0.70 only, so
+          // Plex-direct :32400 still won't work for overlapping-LAN guests (Jellyfin and
+          // everything else via Traefik :443 do). The 10.0.0.x entries stay for guests on
+          // NON-overlapping LANs.
+          { "action": "accept", "src": ["group:guests"], "dst": ["10.0.0.0/24:443", "10.0.0.70:53", "10.0.0.70:32400", "tag:subnet-router:443", "tag:subnet-router:53"] },
         ],
       }
 
