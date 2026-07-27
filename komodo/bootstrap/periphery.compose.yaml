@@ -84,6 +84,12 @@ services:
       # value). No JWT keys (mobile app / PowerSync excluded). Resolved in the compose as ${VAR}.
       WGER_SECRET_KEY: ${WGER_SECRET_KEY}
       WGER_POSTGRES_PASSWORD: ${WGER_POSTGRES_PASSWORD}
+      # --- resume (Reactive Resume): three values read in stacks/resume/compose.yaml as ${VAR}.
+      # RESUME_AUTH_SECRET → Better Auth signing; RESUME_POSTGRES_PASSWORD → the postgres
+      # password + the app's DATABASE_URL (same value); RESUME_ENCRYPTION_SECRET → /agent crypto.
+      RESUME_AUTH_SECRET: ${RESUME_AUTH_SECRET}
+      RESUME_POSTGRES_PASSWORD: ${RESUME_POSTGRES_PASSWORD}
+      RESUME_ENCRYPTION_SECRET: ${RESUME_ENCRYPTION_SECRET}
     volumes:
       # Drive the node's Docker engine.
       - /var/run/docker.sock:/var/run/docker.sock
