@@ -1,7 +1,8 @@
 ---
 # stacks/maintainerr/configure/setup.yml — PLANE 3 (application setup), co-located with
 # the maintainerr stack, run POST-DEPLOY, idempotently (spec FR-023/SC-011). Wires
-# Maintainerr 3.x → Radarr, Sonarr, and Seerr (contract wiring edges 13, 15).
+# Maintainerr 3.x → Radarr, Sonarr, Seerr, and the qBittorrent download client
+# (contract wiring edges 13, 15, 16).
 #
 # MEDIA SERVER = PLEX (already configured in Maintainerr — its collections ARE Plex
 # collections; it does not use Jellyfin). This play ASSERTS Plex is set up and does not
@@ -15,11 +16,18 @@
 # Maintainerr serviceUrl schema rejects it). Maintainerr's settings API is
 # UNAUTHENTICATED on the LAN, so no Maintainerr key is needed.
 #
-# CREDS (.mise.toml): RADARR_API_KEY, SONARR_API_KEY (deterministic servarr keys) and
-# PLEX_TOKEN. Seerr's own API key is NOT a stored secret (Seerr mints it at init), so
-# this play mints a session via the Plex token and reads it at runtime — same trick as
-# stacks/seerr/configure/setup.yml. (edge 16, Maintainerr → qBittorrent download client,
-# is intentionally deferred — optional; Radarr/Sonarr already own torrent removal.)
+# CREDS (.mise.toml): RADARR_API_KEY, SONARR_API_KEY (deterministic servarr keys),
+# PLEX_TOKEN, and MEDIA_ADMIN_PASSWORD (the shared qBit WebUI login). Seerr's own API
+# key is NOT a stored secret (Seerr mints it at init), so this play mints a session via
+# the Plex token and reads it at runtime — same trick as stacks/seerr/configure/setup.yml.
+#
+# EDGE 16 (Maintainerr → qBittorrent): wired here. When Maintainerr deletes media it
+# tells Radarr/Sonarr to remove the file, then removes the torrent from qBittorrent so
+# the download-side hardlink goes too (otherwise it lingers and blocks a real space
+# reclaim — see docs/runbooks/hermit.md and the arr stack's hardlink model). Maintainerr
+# treats a torrent as "done seeding" using qBit's OWN ratio/seed-time limits; the
+# fallback_ratio (schema min 0.5) only applies when qBit enforces no limit — so this
+# pairs with the seed-time stop set in stacks/arr/configure/qbit-setup.yml.
 #
 # RUN:  cd stacks/maintainerr/configure && mise exec -- ansible-playbook setup.yml
 # Re-runs are no-ops (GET-then-POST; only adds when an instance/link is missing).
@@ -35,10 +43,14 @@
     plex_token: "{{ lookup('env', 'PLEX_TOKEN') }}"
     radarr_api_key: "{{ lookup('env', 'RADARR_API_KEY') }}"
     sonarr_api_key: "{{ lookup('env', 'SONARR_API_KEY') }}"
+    # qBit WebUI login = admin / the shared media password (set by qbit-setup.yml).
+    qbit_password: "{{ lookup('env', 'MEDIA_ADMIN_PASSWORD') }}"
     # Container-to-container URLs (shared `traefik` network; no trailing slash).
     radarr_internal: "http://radarr:7878"
     sonarr_internal: "http://sonarr:8989"
     seerr_internal: "http://seerr:5055"
+    # qBit shares gluetun's netns; Maintainerr (on `traefik`) reaches it at gluetun:8080.
+    qbit_internal: "http://gluetun:8080"
 
   tasks:
     - name: Require secrets
@@ -47,7 +59,8 @@
           - radarr_api_key | length > 0
           - sonarr_api_key | length > 0
           - plex_token | length > 0
-        fail_msg: "Set RADARR_API_KEY, SONARR_API_KEY and PLEX_TOKEN in .mise.toml."
+          - qbit_password | length > 0
+        fail_msg: "Set RADARR_API_KEY, SONARR_API_KEY, PLEX_TOKEN and MEDIA_ADMIN_PASSWORD in .mise.toml."
 
     - name: Read Maintainerr settings (reachable? media server?)
       ansible.builtin.uri:
@@ -148,6 +161,58 @@
         status_code: [200, 201]
       when: (mm_sonarr.json | length) == 0
 
+    # -------------------- qBittorrent download client (edge 16) --------------------
+    # Maintainerr 3.x has a dedicated endpoint (GET/POST /api/settings/download-client).
+    # Credentials are optional in the schema, but our qBit requires the WebUI login for
+    # non-localhost callers (Maintainerr is on the traefik net, not gluetun's netns), so
+    # we pass admin / MEDIA_ADMIN_PASSWORD. delete_data=true so removing a download also
+    # deletes its (download-side) data; fallback_ratio must be >= 0.5 per the schema.
+    - name: Read Maintainerr's download-client setting
+      ansible.builtin.uri:
+        url: "{{ mm_url }}/api/settings/download-client"
+        method: GET
+        status_code: 200
+        return_content: true
+      register: mm_dlclient
+
+    - name: Configure the qBittorrent download client (only when none configured)
+      when: (mm_dlclient.json.download_client_url | default('', true)) | length == 0
+      block:
+        - name: Test the download-client connection (fail loudly on rejection)
+          ansible.builtin.uri:
+            url: "{{ mm_url }}/api/settings/test/download-client"
+            method: POST
+            body_format: json
+            body:
+              download_client_url: "{{ qbit_internal }}"
+              download_client_username: admin
+              download_client_password: "{{ qbit_password }}"
+              download_client_delete_data: true
+              download_client_fallback_ratio: 0.5
+            status_code: [200, 201]
+            return_content: true
+          register: mm_dlclient_test
+          no_log: true
+
+        - name: Fail if Maintainerr cannot reach qBittorrent
+          ansible.builtin.assert:
+            that: mm_dlclient_test.json.status == 'OK'
+            fail_msg: "Maintainerr → qBittorrent test failed at {{ qbit_internal }}: {{ mm_dlclient_test.json.message | default('?') }}"
+
+        - name: Add the qBittorrent download client to Maintainerr
+          ansible.builtin.uri:
+            url: "{{ mm_url }}/api/settings/download-client"
+            method: POST
+            body_format: json
+            body:
+              download_client_url: "{{ qbit_internal }}"
+              download_client_username: admin
+              download_client_password: "{{ qbit_password }}"
+              download_client_delete_data: true
+              download_client_fallback_ratio: 0.5
+            status_code: [200, 201]
+          no_log: true
+
     # ---------------------------- Seerr (edge 15) ----------------------------------
     - name: Read Maintainerr's Seerr link
       ansible.builtin.uri:
@@ -222,7 +287,7 @@
         method: GET
         status_code: [200, 201]
         return_content: true
-      loop: [radarr, sonarr, seerr]
+      loop: [radarr, sonarr, seerr, download-client]
       register: mm_final
 
     - name: Summary
@@ -231,5 +296,6 @@
           Maintainerr wired (media server = Plex '{{ mm_settings.json.plex_name }}'):
           Radarr instances = {{ mm_final.results[0].json | length }},
           Sonarr instances = {{ mm_final.results[1].json | length }},
-          Seerr linked = {{ (mm_final.results[2].json.url | default('', true)) | length > 0 }}.
+          Seerr linked = {{ (mm_final.results[2].json.url | default('', true)) | length > 0 }},
+          qBit download client = {{ (mm_final.results[3].json.download_client_url | default('', true)) | length > 0 }}.
           Re-runs are no-ops.

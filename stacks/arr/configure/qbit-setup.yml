@@ -3,7 +3,10 @@
 # POST-DEPLOY, idempotently. Configures qBittorrent's OWN settings (not inter-app
 # wiring — that's wire.yml): set the WebUI password to the shared media login, enable
 # localhost-auth bypass (so gluetun's native port-sync POST works), and set the
-# hardlink-friendly save paths under /data.
+# hardlink-friendly save paths under /data, and a short seed-time share limit so
+# torrents STOP shortly after completing (Maintainerr only removes a torrent it sees
+# as done seeding — a still-seeding torrent is skipped, leaving the download-side
+# hardlink alive and blocking a real cascade delete; see docs/runbooks/hermit.md).
 #
 # CREDS: MEDIA_ADMIN_PASSWORD (shared media login) from the workstation .mise.toml.
 # qBit's WebUI username stays `admin` (qBit default).
@@ -26,6 +29,10 @@
     qbit_pass: "{{ lookup('env', 'MEDIA_ADMIN_PASSWORD') }}"
     save_path: /data/downloads/complete
     temp_path: /data/downloads/incomplete
+    # Stop seeding this many minutes after a torrent completes, so Maintainerr's
+    # cascade delete can actually remove the torrent (action = Stop, not Remove:
+    # no import race, files stay until an explicit delete).
+    seed_minutes: 1
 
   tasks:
     - name: Require the media admin password
@@ -107,7 +114,7 @@
       register: login_final
       no_log: true
 
-    - name: Enable localhost-auth bypass + set save paths (idempotent)
+    - name: Enable localhost-auth bypass + save paths + seed-time stop (idempotent)
       ansible.builtin.uri:
         url: "{{ qbit_url }}/api/v2/app/setPreferences"
         method: POST
@@ -115,13 +122,22 @@
           Referer: "{{ qbit_url }}"
           Cookie: "{{ login_final.cookies_string }}"
         body_format: form-urlencoded
+        # Share limits: enable a seeding-TIME limit only (ratio limit off), and set the
+        # limit action to 0 = Stop torrent. max_ratio_act is the shared "when a share
+        # limit is reached" action for BOTH ratio and seeding-time in qBit 5.x; 0 has
+        # meant Stop/Pause across versions (verify the enum in Options → BitTorrent if a
+        # future image changes it). max_seeding_time is in MINUTES.
         body:
           json: >-
             {"bypass_local_auth": true, "save_path": "{{ save_path }}",
-             "temp_path": "{{ temp_path }}", "temp_path_enabled": true}
+             "temp_path": "{{ temp_path }}", "temp_path_enabled": true,
+             "max_ratio_enabled": false,
+             "max_seeding_time_enabled": true, "max_seeding_time": {{ seed_minutes }},
+             "max_ratio_act": 0}
 
     - name: Summary
       ansible.builtin.debug:
         msg: >-
           qBittorrent configured: WebUI login admin/<media password>, localhost-auth
-          bypass ON (gluetun port-sync), save paths under /data. Re-runs are no-ops.
+          bypass ON (gluetun port-sync), save paths under /data, seeding stops
+          {{ seed_minutes }} min after completion (action=Stop). Re-runs are no-ops.
