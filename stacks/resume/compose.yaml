@@ -53,8 +53,8 @@ services:
       # Optional /agent AI workspace: Redis queue + at-rest crypto for saved providers.
       REDIS_URL: redis://redis:6379
       ENCRYPTION_SECRET: ${RESUME_ENCRYPTION_SECRET}
-      # Registration open for the FIRST account only — flip to "true" and redeploy afterwards.
-      FLAG_DISABLE_SIGNUPS: "false"
+      # Registration CLOSED (first account created 2026-07-27). Flip to "false" + redeploy to reopen.
+      FLAG_DISABLE_SIGNUPS: "true"
     volumes:
       # On-disk store (avatars, uploads, cached exports) — Dell-local (golden rule).
       - resume-data:/app/data
