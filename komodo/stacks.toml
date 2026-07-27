@@ -400,3 +400,25 @@ git_provider = "github.com"
 branch = "main"
 file_paths = ["stacks/resume/compose.yaml"]
 webhook_enabled = false
+
+# ============================================================================
+# basic-memory — self-hosted MCP knowledge-graph server (spec-free ADDED app).
+# Stateful → ragnaforge-dell (golden rule). ONE service, NO web UI: it speaks MCP
+# over streamable-http at memory.ragnaforge.xyz/mcp so AI clients (Claude Code/
+# Desktop, hermit) get a persistent Markdown memory. NO secrets (SQLite). HTTP has
+# NO auth → LAN/VPN-only via Traefik, no router forward (the tailnet is the trust
+# boundary). Bring-up + `claude mcp add` wiring in docs/runbooks/basic-memory.md.
+# Manual (webhook_enabled=false).
+# ============================================================================
+[[stack]]
+name = "basic-memory"
+description = "basic-memory — self-hosted MCP knowledge-graph server (Markdown + SQLite; streamable-http at /mcp; no web UI, no auth → LAN/VPN-only)."
+tags = ["apps"]
+
+[stack.config]
+server = "ragnaforge-dell"
+repo = "RushilBasappa/homeserve"
+git_provider = "github.com"
+branch = "main"
+file_paths = ["stacks/basic-memory/compose.yaml"]
+webhook_enabled = false

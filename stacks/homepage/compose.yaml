@@ -52,6 +52,11 @@ configs:
               icon: whats-up-docker.png
               href: https://wud.ragnaforge.xyz
               description: Container image-update tracker — flags stacks with a newer tag (LAN/Tailscale only)
+          - Basic Memory:
+              # No web UI — an MCP endpoint. mdi- icon (brand icon likely not in the set).
+              icon: mdi-brain
+              href: https://memory.ragnaforge.xyz/mcp
+              description: MCP knowledge-graph memory for AI clients (no web UI; endpoint only, LAN/Tailscale)
       - Apps:
           - Vaultwarden:
               icon: vaultwarden.png

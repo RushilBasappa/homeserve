@@ -1,0 +1,74 @@
+# basic-memory — a self-hosted MCP knowledge-graph server (basicmachines-co/basic-memory).
+# An ADDED app riding the existing platform (edge/DNS/TLS/Komodo) — NOT a formal PLAN phase
+# (cf. wger, resume). Stateful → ragnaforge-dell (golden rule). LAN/VPN-only: Traefik fronts
+# it at memory.ragnaforge.xyz; NO host ports, NO router forward.
+#
+# WHAT IT IS: not a web app — an MCP server that gives AI assistants (Claude Code/Desktop, and
+# potentially the hermit agent) a persistent, human-readable memory. Notes are plain Markdown
+# in a knowledge graph (wikilinks + observations); a SQLite index powers semantic search. There
+# is NO browser UI — clients speak MCP over HTTP to /mcp (see the runbook for `claude mcp add`).
+#
+# TRANSPORT: the upstream image defaults to SSE; we override to `streamable-http` (the CLI's
+# "recommended for web deployments" transport) served at /mcp on :8000 — cleaner behind a
+# reverse proxy than long-lived SSE. Switch back to `sse` (endpoint /sse) if a client needs it.
+#
+# ⚠ NO AUTHORIZATION: basic-memory's HTTP endpoints have NO auth (upstream: "should not be
+# exposed on a public network"). Our only guard is the edge posture — reachable ONLY via
+# Traefik on the LAN/tailnet, never router-forwarded. The tailnet IS the trust boundary; anyone
+# on it can read/write the graph. That matches the lab's other unauthenticated internal tools.
+#
+# STORAGE (Dell-local, golden rule):
+#   basic-memory-data   → /app/data                     the Markdown knowledge graph (BASIC_MEMORY_HOME
+#                                                        = /app/data/basic-memory, the default project).
+#   basic-memory-config → /home/appuser/.basic-memory   config.json + the SQLite search index.
+# Runs non-root as appuser (uid/gid 1000, baked into the image).
+#
+# SECRETS: NONE. SQLite, no API keys, no DB password → nothing in mise / periphery / .env.
+#
+# IMAGE TAG: pinned (no :latest) per Diun/WUD intent. Tags are UNPREFIXED (`0.22.1`, not
+# `v0.22.1`); `0.22.1` == the :latest digest at write. Bump after checking releases:
+# https://github.com/basicmachines-co/basic-memory/releases
+
+services:
+  basic-memory:
+    image: ghcr.io/basicmachines-co/basic-memory:0.22.1
+    container_name: basic-memory
+    restart: unless-stopped
+    # Override the image's default (SSE) → streamable-http at /mcp on :8000.
+    command: ["basic-memory", "mcp", "--transport", "streamable-http", "--host", "0.0.0.0", "--port", "8000"]
+    environment:
+      # The default project ("main") resolves to BASIC_MEMORY_HOME=/app/data/basic-memory (image ENV).
+      BASIC_MEMORY_DEFAULT_PROJECT: main
+      # Watch the Markdown tree and re-index on change (so edits made outside MCP are picked up).
+      BASIC_MEMORY_SYNC_CHANGES: "true"
+      BASIC_MEMORY_LOG_LEVEL: INFO
+    volumes:
+      - basic-memory-data:/app/data
+      - basic-memory-config:/home/appuser/.basic-memory
+    networks:
+      # Shared external proxy network — reached only via Traefik (no host ports).
+      - traefik
+    healthcheck:
+      # Upstream's own probe — confirms the venv/binary is alive (the image ships no HTTP health path).
+      test: ["CMD", "basic-memory", "--version"]
+      interval: 30s
+      timeout: 10s
+      start_period: 10s
+      retries: 3
+    labels:
+      # --- canonical Traefik routing labels; the MCP server listens on 8000 in Docker ---
+      - "traefik.enable=true"
+      - "traefik.http.routers.basic-memory.rule=Host(`memory.ragnaforge.xyz`)"
+      - "traefik.http.routers.basic-memory.entrypoints=websecure"
+      - "traefik.http.routers.basic-memory.tls=true"
+      - "traefik.http.services.basic-memory.loadbalancer.server.port=8000"
+
+volumes:
+  # Dell-local named volumes (golden rule). Nothing on /srv/nfs or the Mac.
+  basic-memory-data:
+  basic-memory-config:
+
+networks:
+  # Shared external proxy network — only Traefik reaches the MCP endpoint.
+  traefik:
+    external: true
