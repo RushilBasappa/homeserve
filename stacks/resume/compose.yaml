@@ -1,0 +1,133 @@
+# resume — Reactive Resume, a self-hosted résumé builder (AmruthPillai/Reactive-Resume).
+# An ADDED app riding the existing platform (edge/DNS/TLS/Komodo) — NOT a formal PLAN
+# phase (cf. wger, hermit). Stateful → ragnaforge-dell (golden rule). LAN/VPN-only:
+# Traefik fronts it at resume.ragnaforge.xyz; NO host ports, NO router forward.
+#
+# TOPOLOGY — v5 is much leaner than the v4 guides still floating around (which bundled a
+# browserless/Chrome printer + a Minio/S3 store). v5 needs neither:
+#   app      — the Node/Hono+Vite server on :3000 (the routed UI). Self-migrates on boot
+#              (Prisma migrations run at startup) → no manual db step. PDF export is handled
+#              in-app; there is NO separate Chrome service anymore.
+#   postgres — postgres:18 (resume-pgdata; the durable state).
+#   redis    — redis:7-alpine (resume-redis). ONLY the optional authenticated /agent AI
+#              workspace uses it; upstream compose depends on it, so we keep it internal.
+#
+# STORAGE — LOCAL FILESYSTEM, not S3. v5 falls back to on-disk storage under /app/data when
+# no S3_* keys are set (uploads, avatars, cached PDFs). We mount a Dell-local named volume
+# there (resume-data) instead of running SeaweedFS/Minio — simpler and keeps every byte on
+# the Dell (golden rule). To switch to S3 later, set the S3_* env and drop the volume.
+#
+# TLS-BEHIND-PROXY: APP_URL is the EXTERNAL https URL — the app builds auth callbacks, OAuth
+# issuer URLs, OpenGraph metadata and absolute upload URLs from it, so it must match how the
+# browser reaches it. Traefik terminates TLS and forwards http to :3000 (no FORCE_SSL knob).
+#
+# SIGNUP LOCKDOWN (cf. vaultwarden/sure): bring up ONCE with FLAG_DISABLE_SIGNUPS=false,
+# create your account, then flip it to "true" and redeploy so registration is closed.
+#
+# SECRETS (from mise → Periphery → ${VAR}; the repo is PUBLIC so nothing sensitive is inlined):
+#   RESUME_AUTH_SECRET       — Better Auth signing secret   (openssl rand -hex 32)
+#   RESUME_POSTGRES_PASSWORD — Postgres password             (openssl rand -hex 32)
+#   RESUME_ENCRYPTION_SECRET — /agent saved-provider crypto  (openssl rand -hex 32)
+# Non-secret config is inlined (Komodo pulls the compose from git; only ${VAR} is interpolated
+# from the Periphery environment).
+#
+# IMAGE TAG: pinned (no :latest) per Diun/WUD intent. Bump after checking releases:
+# https://github.com/AmruthPillai/Reactive-Resume/releases  (v5.2.3 == :latest digest at write).
+
+services:
+  # --- the Reactive Resume server (the only routed service; self-migrates on boot) --------
+  app:
+    image: ghcr.io/amruthpillai/reactive-resume:v5.2.3
+    container_name: resume
+    restart: unless-stopped
+    environment:
+      # External URL — must match how the browser reaches it (auth callbacks / upload URLs).
+      APP_URL: https://resume.ragnaforge.xyz
+      PORT: "3000"
+      # Postgres DSN — password comes from mise (${VAR}); everything else is fixed.
+      DATABASE_URL: postgresql://postgres:${RESUME_POSTGRES_PASSWORD}@postgres:5432/postgres
+      # Better Auth signing secret (mise).
+      AUTH_SECRET: ${RESUME_AUTH_SECRET}
+      # Local-filesystem storage (no S3): keep uploads/cache on the mounted volume.
+      LOCAL_STORAGE_PATH: /app/data
+      # Optional /agent AI workspace: Redis queue + at-rest crypto for saved providers.
+      REDIS_URL: redis://redis:6379
+      ENCRYPTION_SECRET: ${RESUME_ENCRYPTION_SECRET}
+      # Registration open for the FIRST account only — flip to "true" and redeploy afterwards.
+      FLAG_DISABLE_SIGNUPS: "false"
+    volumes:
+      # On-disk store (avatars, uploads, cached exports) — Dell-local (golden rule).
+      - resume-data:/app/data
+    networks:
+      # `resume` to reach postgres/redis; `traefik` so ONLY the app is routed.
+      - resume
+      - traefik
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      # Upstream's own probe — the image ships node; /api/health is the liveness endpoint.
+      # start_period covers boot + Prisma migrations on a fresh db.
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then((r)=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      start_period: 60s
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    labels:
+      # --- canonical Traefik routing labels; the server listens on 3000 in Docker ---
+      - "traefik.enable=true"
+      - "traefik.http.routers.resume.rule=Host(`resume.ragnaforge.xyz`)"
+      - "traefik.http.routers.resume.entrypoints=websecure"
+      - "traefik.http.routers.resume.tls=true"
+      - "traefik.http.services.resume.loadbalancer.server.port=3000"
+
+  # --- PostgreSQL (the durable state) -------------------------------------------------------
+  postgres:
+    image: postgres:18
+    container_name: resume-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${RESUME_POSTGRES_PASSWORD}
+    volumes:
+      # Postgres 18+ wants the mount at /var/lib/postgresql (NOT .../data) — cf. sure/wger.
+      - resume-pgdata:/var/lib/postgresql
+    networks:
+      - resume
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # --- Redis (optional /agent AI workspace queue) -------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: resume-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - resume-redis:/data
+    networks:
+      - resume
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  # All Dell-local named volumes (golden rule). Nothing on /srv/nfs or the Mac.
+  resume-data:
+  resume-pgdata:
+  resume-redis:
+
+networks:
+  # Internal — postgres/redis reachable only by the app; never published.
+  resume:
+  # Shared external proxy network — only the app attaches for its route.
+  traefik:
+    external: true

@@ -379,3 +379,24 @@ git_provider = "github.com"
 branch = "main"
 file_paths = ["stacks/wger/compose.yaml"]
 webhook_enabled = false
+
+# ============================================================================
+# resume — Reactive Resume, a self-hosted résumé builder (spec-free ADDED app,
+# cf. wger/hermit). Stateful → ragnaforge-dell (golden rule). ONE stack, THREE
+# services (app+postgres+redis); v5 needs NO Chrome printer and NO S3 store
+# (local-filesystem storage on a Dell volume). Traefik fronts the app at
+# resume.ragnaforge.xyz; LAN/VPN-only, no router forward. Self-migrates on boot.
+# Bring-up + signup lockdown in docs/runbooks/resume.md. Manual (webhook_enabled=false).
+# ============================================================================
+[[stack]]
+name = "resume"
+description = "resume — Reactive Resume self-hosted résumé builder (Node/Hono; app+postgres+redis; local-FS storage; self-migrates)."
+tags = ["apps"]
+
+[stack.config]
+server = "ragnaforge-dell"
+repo = "RushilBasappa/homeserve"
+git_provider = "github.com"
+branch = "main"
+file_paths = ["stacks/resume/compose.yaml"]
+webhook_enabled = false

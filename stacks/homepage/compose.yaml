@@ -71,6 +71,10 @@ configs:
               icon: mdi-dumbbell
               href: https://wger.ragnaforge.xyz
               description: Fitness / workout / nutrition tracker (LAN/VPN only)
+          - Reactive Resume:
+              icon: reactive-resume.png
+              href: https://resume.ragnaforge.xyz
+              description: Self-hosted résumé builder (LAN/VPN only)
           - whoami:
               icon: traefik.png
               href: https://whoami.ragnaforge.xyz
