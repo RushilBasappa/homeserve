@@ -20,7 +20,9 @@ services:
     command: --quiet --wiredTigerCacheSizeGB 0.5
     restart: unless-stopped
     environment:
-      MONGO_INITDB_ROOT_USERNAME: ${KOMODO_DB_USERNAME}
+      # Literal, not ${KOMODO_DB_USERNAME} — the username is not a secret, and the
+      # existing volume's root user was created as `komodo`. Must match core below.
+      MONGO_INITDB_ROOT_USERNAME: komodo
       MONGO_INITDB_ROOT_PASSWORD: ${KOMODO_DB_PASSWORD}
     volumes:
       - komodo-mongo-data:/data/db
@@ -56,7 +58,7 @@ services:
       KOMODO_RESOURCE_POLL_INTERVAL: 5-min
       KOMODO_DATABASE_ADDRESS: mongo:27017
       KOMODO_DATABASE_DB_NAME: komodo
-      KOMODO_DATABASE_USERNAME: ${KOMODO_DB_USERNAME}
+      KOMODO_DATABASE_USERNAME: komodo
       KOMODO_DATABASE_PASSWORD: ${KOMODO_DB_PASSWORD}
       KOMODO_PASSKEY: ${KOMODO_PASSKEY}
       KOMODO_WEBHOOK_SECRET: ${KOMODO_WEBHOOK_SECRET}
