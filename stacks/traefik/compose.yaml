@@ -45,6 +45,30 @@ configs:
 # traefik-media-helpers file-routes (byparr/cleanuparr/huntarr) REMOVED 2026-07-20 —
 # the media-helpers Mac stack was deleted. Re-add a file config here if it ever returns.
 
+  # FILE-provider routes for containers Traefik cannot see by Docker LABEL. Docker label
+  # discovery only works for containers on the shared `traefik` bridge network; anything on
+  # the HOST network (or on the Mac) is invisible to it and must be routed by explicit URL.
+  traefik-file-routes:
+    content: |
+      http:
+        routers:
+          # homeassistant runs `network_mode: host` on the Dell so it can hear the LAN
+          # broadcast/multicast traffic (mDNS/SSDP/DHCP) device discovery depends on — see
+          # stacks/homeassistant/compose.yaml. It therefore has NO Traefik labels; this is
+          # its route. 10.0.0.70 = ragnaforge-dell's LAN IP (provision/inventory.yml).
+          homeassistant:
+            rule: "Host(`homeassistant.ragnaforge.xyz`)"
+            entryPoints:
+              - websecure
+            service: homeassistant
+            # Empty {} = use the default TLS store, i.e. the wildcard above (cf. tls=true labels).
+            tls: {}
+        services:
+          homeassistant:
+            loadBalancer:
+              servers:
+                - url: "http://10.0.0.70:8123"
+
 services:
   traefik:
     image: traefik:v3
@@ -87,6 +111,8 @@ services:
     configs:
       - source: traefik-dynamic
         target: /dynamic/tls.yaml
+      - source: traefik-file-routes
+        target: /dynamic/routes.yaml
     volumes:
       # Read-only Docker socket for label discovery (routes come from containers).
       - /var/run/docker.sock:/var/run/docker.sock:ro

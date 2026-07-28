@@ -58,6 +58,7 @@ and the Homepage entry. One name, everywhere.
 | 51821 | TCP | wg-easy | LAN/Tailscale admin — never router-forwarded |
 | 6881 | TCP/UDP | arr (via gluetun) | **outbound only via Proton**; inbound = Proton's forwarded port. **Not** router-forwarded — no home-IP exposure |
 | 45876 | TCP | beszel-agent-mac | **LAN only** — the Dell hub polls the Mac agent at `10.0.0.71:45876`; not router-forwarded, no public exposure |
+| 8123 | TCP | homeassistant | **LAN/Tailscale only** — HA runs `network_mode: host` on the Dell so it can hear the mDNS/SSDP/DHCP broadcast traffic device discovery needs. Bridge networking silently drops that traffic, so this is a **deliberate, documented break** of the no-host-ports rule. Consequence: no Docker-label routing — Traefik's **file** provider fronts it at `homeassistant.ragnaforge.xyz` → `10.0.0.70:8123`. Never router-forwarded |
 
 _(Live as of Phase 3; Phase-5 rows added. Phase-6: the Tautulli (`8181`) and Beszel
 hub (`8090`) UIs on the **Dell** publish **no** host ports — reached only via Traefik at

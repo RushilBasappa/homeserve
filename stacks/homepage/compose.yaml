@@ -80,6 +80,10 @@ configs:
               icon: reactive-resume.png
               href: https://resume.ragnaforge.xyz
               description: Self-hosted résumé builder (LAN/VPN only)
+          - Home Assistant:
+              icon: home-assistant.png
+              href: https://homeassistant.ragnaforge.xyz
+              description: Home-automation hub (LAN/VPN only)
           - whoami:
               icon: traefik.png
               href: https://whoami.ragnaforge.xyz

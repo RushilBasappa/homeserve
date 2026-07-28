@@ -422,3 +422,34 @@ git_provider = "github.com"
 branch = "main"
 file_paths = ["stacks/basic-memory/compose.yaml"]
 webhook_enabled = false
+
+# ============================================================================
+# homeassistant — the home-automation hub (spec-free ADDED app, cf. resume/
+# basic-memory). Stateful → ragnaforge-dell (golden rule); ONE volume holds the
+# whole instance. THE ONE DELIBERATE CONVENTION BREAK: `network_mode: host`, so
+# HA can hear the LAN mDNS/SSDP/DHCP traffic device discovery needs. That means
+# NO Traefik LABELS — it is routed by Traefik's FILE provider → 10.0.0.70:8123
+# (config `traefik-file-routes` in stacks/traefik/compose.yaml), and it binds
+# :8123 on the Dell, LAN/tailnet only, never router-forwarded. A second service
+# (homeassistant-init) seeds /config on FIRST boot only (copy-if-absent) so the
+# load-bearing reverse-proxy block lives in git. NO secrets (owner account is
+# created in the browser at onboarding). NO radio passthrough yet — a Zigbee/
+# Z-Wave USB coordinator needs a `devices:` mapping (runbook). Bring-up +
+# onboarding + audits in docs/runbooks/homeassistant.md. Manual (webhook_enabled=false).
+#
+# ⚠ DEPLOY ORDER: the Traefik route ships as an INLINE `configs:` block, and
+# editing one needs a container RECREATE (DestroyStack + DeployStack), not a
+# plain redeploy — see the runbook.
+# ============================================================================
+[[stack]]
+name = "homeassistant"
+description = "homeassistant — home-automation hub (HA Container; host network for mDNS/SSDP discovery; routed via Traefik file provider; LAN/VPN-only)."
+tags = ["apps"]
+
+[stack.config]
+server = "ragnaforge-dell"
+repo = "RushilBasappa/homeserve"
+git_provider = "github.com"
+branch = "main"
+file_paths = ["stacks/homeassistant/compose.yaml"]
+webhook_enabled = false

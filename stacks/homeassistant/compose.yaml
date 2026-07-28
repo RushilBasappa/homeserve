@@ -1,0 +1,143 @@
+# homeassistant — the home-automation hub (home-assistant/core, "HA Container" flavour).
+# An ADDED app riding the existing platform (edge/DNS/TLS/Komodo) — NOT a formal PLAN phase
+# (cf. wger, resume, basic-memory). Stateful → ragnaforge-dell (golden rule). LAN/VPN-only:
+# Traefik fronts it at homeassistant.ragnaforge.xyz; NO router forward.
+#
+# ⚠ THE ONE DELIBERATE CONVENTION BREAK: `network_mode: host`.
+# Home Assistant discovers devices by LISTENING TO LAN BROADCAST/MULTICAST — mDNS/Bonjour
+# (HomeKit, ESPHome, Chromecast, AirPlay, Shelly, printers), SSDP/UPnP (Sonos, Roku, smart TVs),
+# and DHCP sniffing. Docker BRIDGE networking drops all of it, which would leave every device
+# to be added by hand, by IP, forever. So HA runs on the Dell's host network — the same call the
+# upstream docs make ("Home Assistant Container ... requires host networking for discovery").
+#
+# Consequences of that break, and how each is handled:
+#   - HA is NOT on the `traefik` network, so Docker-LABEL routing cannot reach it. It is routed
+#     instead by Traefik's FILE provider → http://10.0.0.70:8123 (see stacks/traefik/compose.yaml,
+#     config `traefik-file-routes`) — the identical pattern already used to front Mac stacks.
+#   - :8123 is therefore bound on the Dell's host, LAN/tailnet only. NOT router-forwarded, and
+#     recorded in docs/CONVENTIONS.md → Ports. Reach it via https://homeassistant.ragnaforge.xyz.
+#
+# CONFIG SEEDING (why there is an init service): HA writes /config itself, so the repo cannot own
+# configuration.yaml outright — a read-only `configs:` mount there would break the UI automation
+# editor, which needs writable automations/scripts/scenes files. Instead `homeassistant-init`
+# SEEDS the volume on first boot ONLY (copy-if-absent) and is a no-op on every deploy after. That
+# keeps the load-bearing reverse-proxy block declarative in git while leaving HA free to own its
+# own config directory. Edit configuration.yaml in place afterwards (File editor add-on is NOT
+# available in Container flavour — use `docker exec -it homeassistant vi /config/configuration.yaml`
+# or the Studio Code Server alternative in the runbook).
+#
+# WHY http.trusted_proxies IS MANDATORY: Traefik always sets X-Forwarded-For. If HA sees that
+# header from an untrusted source it REFUSES the request outright ("A request from a reverse
+# proxy was received ... but your HTTP integration is not set-up for reverse proxies") — a hard
+# 400, not a warning. The seeded block trusts the Docker bridge range Traefik dials out from,
+# plus loopback. Nothing else.
+#
+# SECRETS: NONE. HA has no bootstrap credentials — the owner account is created in the browser
+# during onboarding, and per-integration tokens (cloud accounts, API keys) are entered in the UI
+# and stored encrypted in /config/.storage. So nothing lands in mise / periphery / .env.
+#
+# NO RADIO PASSTHROUGH (yet): this stack has no `devices:` mapping. Zigbee/Z-Wave/Matter-Thread
+# need a USB coordinator physically plugged into the Dell and passed through — see the runbook's
+# "Adding a Zigbee/Z-Wave radio" section for the exact diff when that hardware exists.
+#
+# IMAGE TAG: pinned (no :latest) per Diun/WUD intent. HA ships a NEW MINOR EVERY MONTH (calver
+# YYYY.M.P) and month releases can carry breaking integration changes — read the release notes
+# before bumping, never bump blind: https://www.home-assistant.io/blog/categories/release-notes/
+# (2026.7.4 == the :stable/:latest digest at write.)
+
+configs:
+  # Seeded into the volume ONCE by homeassistant-init (see above) — NOT mounted into HA, which
+  # must be able to rewrite this file. After first boot, this block is documentation; the live
+  # copy is /config/configuration.yaml on the Dell volume.
+  homeassistant-configuration:
+    content: |
+      # Seeded from stacks/homeassistant/compose.yaml on first boot. Owned by HA thereafter.
+
+      # The standard meta-integration: frontend, history, logbook, mobile app, discovery, etc.
+      default_config:
+
+      # --- reverse proxy (load-bearing; do not remove) ---------------------------------------
+      # Traefik terminates TLS on the `traefik` bridge network and dials this host on
+      # 10.0.0.70:8123, so the request arrives from a Docker bridge address carrying an
+      # X-Forwarded-For. Without this block HA rejects it with a 400.
+      http:
+        use_x_forwarded_for: true
+        trusted_proxies:
+          - 172.16.0.0/12   # Docker bridge networks on the Dell (where Traefik lives)
+          - 127.0.0.1
+          - ::1
+
+      # UI-managed editors write to these files; they must exist and stay writable.
+      automation: !include automations.yaml
+      script: !include scripts.yaml
+      scene: !include scenes.yaml
+
+services:
+  # --- first-boot config seeder (runs to completion, then exits) -----------------------------
+  # Copy-if-absent ONLY: it never overwrites a file HA or you have since edited, so a redeploy
+  # cannot clobber live config. Written out flat (no shell loop/variables) so nothing in the
+  # command can collide with Compose's `$`-interpolation.
+  homeassistant-init:
+    image: alpine:3.22
+    container_name: homeassistant-init
+    restart: "no"
+    configs:
+      - source: homeassistant-configuration
+        target: /seed/configuration.yaml
+    volumes:
+      - homeassistant-config:/config
+    command:
+      - sh
+      - -c
+      - |
+        set -eu
+        [ -f /config/configuration.yaml ] || cp /seed/configuration.yaml /config/configuration.yaml
+        # HA's own defaults: automations/scenes are LISTS, scripts is a MAPPING. Wrong type = boot failure.
+        [ -f /config/automations.yaml ] || printf '[]\n' > /config/automations.yaml
+        [ -f /config/scenes.yaml ]      || printf '[]\n' > /config/scenes.yaml
+        [ -f /config/scripts.yaml ]     || printf '{}\n' > /config/scripts.yaml
+        echo "seed ok"
+
+  # --- the hub ------------------------------------------------------------------------------
+  homeassistant:
+    image: ghcr.io/home-assistant/home-assistant:2026.7.4
+    container_name: homeassistant
+    restart: unless-stopped
+    depends_on:
+      homeassistant-init:
+        condition: service_completed_successfully
+    # See the header: host networking is required for mDNS/SSDP/DHCP device discovery. This is
+    # what binds :8123 on the Dell (LAN/tailnet only, never router-forwarded) and why there is
+    # no `networks:`/`ports:` block and no Traefik LABELS — the file provider routes it instead.
+    network_mode: host
+    environment:
+      # Local time for automations, sun triggers, history graphs and logs.
+      TZ: America/Los_Angeles
+    volumes:
+      # Dell-local named volume (golden rule): the entire HA brain — configuration.yaml, the
+      # .storage registries (devices/entities/areas/users), and the SQLite recorder database.
+      - homeassistant-config:/config
+      # Read-only host time zone so container and host agree even if TZ is ever unset.
+      - /etc/localtime:/etc/localtime:ro
+      # dbus is required by Bluetooth/BlueZ integrations. Read-only; harmless when unused.
+      - /run/dbus:/run/dbus:ro
+    healthcheck:
+      # /manifest.json is served unauthenticated once the HTTP stack is up. python3 is guaranteed
+      # present (HA *is* a Python app), unlike curl. start_period covers a slow first boot, where
+      # HA installs each integration's Python deps before the frontend answers.
+      test:
+        - CMD
+        - python3
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8123/manifest.json', timeout=5)"
+      start_period: 180s
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  # Dell-local (golden rule). Nothing on /srv/nfs or the Mac. This single volume is the whole
+  # instance — irreplaceable state (automations, device pairings, history) → Phase-10 backup.
+  homeassistant-config:
+
+# No `networks:` block on purpose — the hub is on the host network and the seeder needs none.
