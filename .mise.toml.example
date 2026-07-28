@@ -54,6 +54,15 @@ KOMODO_JWT_SECRET     = "changeme-komodo-jwt-secret"
 # core.compose.yaml + periphery.compose.yaml.
 KOMODO_PASSKEY        = "changeme-komodo-passkey"
 
+# NON-secret Core config, kept here so the deployment is portable to another
+# house/domain without editing tracked files. Both are referenced as ${VAR} in
+# core.compose.yaml, so they MUST be set on the Dell — an unset value resolves to
+# an empty string (Compose only warns) and Core comes up advertising no base URL.
+# KOMODO_HOST is the public-facing URL Core advertises in webhook URLs and links.
+KOMODO_HOST           = "https://komodo.example.com"
+# UI title.
+KOMODO_TITLE          = "Ragnaforge"
+
 # Demo stack secret for the Phase-2 secret-injection proof (US3). A throwaway
 # value injected into the whoami test stack as ${WHOAMI_TEST_SECRET} to prove a
 # secret reaches a container with no value in git. Safe to delete after Phase 2.

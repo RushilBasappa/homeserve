@@ -5,8 +5,6 @@ services:
     command: --quiet --wiredTigerCacheSizeGB 0.5
     restart: unless-stopped
     environment:
-      # Username is not a secret and is what the DB's root user was created as.
-      # The PASSWORD is — it comes from the gitignored .mise.toml via `mise exec`.
       MONGO_INITDB_ROOT_USERNAME: komodo
       MONGO_INITDB_ROOT_PASSWORD: ${KOMODO_DB_PASSWORD}
     volumes:
@@ -33,18 +31,14 @@ services:
     ports:
       - "9120:9120"
     environment:
-      # --- Non-secret config (was core.env) ---
-      KOMODO_HOST: https://komodo.ragnaforge.xyz
-      KOMODO_TITLE: Ragnaforge
+      KOMODO_HOST: ${KOMODO_HOST}
+      KOMODO_TITLE: ${KOMODO_TITLE}
       KOMODO_LOCAL_AUTH: "true"
       KOMODO_DISABLE_USER_REGISTRATION: "true"
       KOMODO_ENABLE_NEW_USERS: "false"
-      # Core polls git for new commits at this interval (default 1-hr is too slow
-      # for an active repo). Refreshes Core's VIEW only — deploys stay manual.
       KOMODO_RESOURCE_POLL_INTERVAL: 5-min
       KOMODO_DATABASE_ADDRESS: mongo:27017
       KOMODO_DATABASE_DB_NAME: komodo
-      # Must match mongo above: literal username, password from .mise.toml.
       KOMODO_DATABASE_USERNAME: komodo
       KOMODO_DATABASE_PASSWORD: ${KOMODO_DB_PASSWORD}
       KOMODO_PASSKEY: ${KOMODO_PASSKEY}
