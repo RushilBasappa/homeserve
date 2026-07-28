@@ -57,7 +57,7 @@ services:
       # Let containers on other Docker networks (and the LAN) reach services inside
       # this netns; gluetun auto-detects its connected docker nets, this adds the LAN.
       FIREWALL_OUTBOUND_SUBNETS: 10.0.0.0/24
-      # Non-secret constant; mirrored in komodo/variables.toml MEDIA_TZ.
+      # Non-secret constant, inlined as a literal (see the PUID/PGID/TZ note below).
       TZ: America/Los_Angeles
     networks:
       # `arr` so the PVRs reach qBit at http://gluetun:8080; `traefik` so the qBit
@@ -84,7 +84,8 @@ services:
     depends_on:
       - gluetun
     environment:
-      # Non-secret constants; mirrored in komodo/variables.toml (MEDIA_PUID/PGID/TZ).
+      # Non-secret constants, inlined as literals (Komodo does not interpolate
+      # [[VAR]] into git-pulled composes). Same PUID/PGID/TZ across every media stack.
       PUID: "1000"
       PGID: "1000"
       TZ: America/Los_Angeles

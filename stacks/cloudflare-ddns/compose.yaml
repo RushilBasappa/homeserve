@@ -30,8 +30,7 @@ services:
       # via AdGuard, so no other public A records exist. Inlined (non-secret
       # constant): Komodo does NOT interpolate [[VAR]] into git-pulled compose
       # content in this setup (sync include_variables=false), and it's not a mise
-      # secret — so a literal is the reliable choice. Value tracked for reference
-      # in komodo/variables.toml (VPN_HOSTNAME).
+      # secret — so a literal is the reliable choice.
       # headscale.ragnaforge.xyz = the SELF-HOSTED control plane's public endpoint
       # (specs/011-headscale-vpn/T004). It must resolve to the home's current public
       # IP so external clients can handshake on 443/tcp + STUN on 3478/udp. Replaces

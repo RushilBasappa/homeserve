@@ -169,9 +169,9 @@ Rules:
 - **Machine plane is host setup only.** It never touches application config. Phase 5
   added no machine-plane work — it mounts the Phase-4 `/srv/nfs` tree as-is.
 - **Deployment plane is declarative and secret-free.** Compose references secrets as
-  `${VAR}` (from the mise-rendered Periphery env) and inlines non-secret Komodo
-  variables as literals (Komodo does not interpolate `[[VAR]]` into git-pulled
-  composes — mirror the value and cite `komodo/variables.toml`).
+  `${VAR}` (from the mise-rendered Periphery env) and inlines non-secret config as
+  literals — Komodo does not interpolate `[[VAR]]` into git-pulled composes, so a
+  literal with a comment explaining the value is the only reliable option.
 - **Application plane is co-located, post-deploy, and idempotent.** Wiring lives with
   its stack (e.g. `stacks/arr/configure/wire.yml`), runs only after the apps are up
   with their API keys pinned, GET-then-POSTs so a re-run is a no-op, and **fails

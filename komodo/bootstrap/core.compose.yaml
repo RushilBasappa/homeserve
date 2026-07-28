@@ -6,8 +6,8 @@
 # every later app — is Komodo-managed via ResourceSync, not brought up this way.
 #
 # Secrets come from the gitignored `.mise.toml` via `mise exec` (the Makefile
-# target wraps the compose call). Non-secret config lives in `core.env`
-# (copy `core.env.example`; the real `core.env` is gitignored by `*.env`).
+# target wraps the compose call) and are referenced as `${VAR}`. Non-secret
+# config is inlined below as literals — there is no `core.env` to copy.
 #
 # Exposure (research R7): Core's UI/API is published on :9120 but the router
 # forwards no port to it, so only the LAN (10.0.0.0/24) and Tailscale can reach
@@ -16,55 +16,48 @@
 services:
   mongo:
     image: mongo:8
-    # `komodo.skip` keeps Komodo from ever trying to self-manage the bootstrap DB.
     labels: [komodo.skip]
-    restart: unless-stopped
-    # Cap WiredTiger cache — the Dell has only 7.5 GB shared with future stacks
-    # (research R1). --quiet trims log noise.
     command: --quiet --wiredTigerCacheSizeGB 0.5
+    restart: unless-stopped
     environment:
-      MONGO_INITDB_ROOT_USERNAME: ${KOMODO_DB_USERNAME:-komodo}
+      MONGO_INITDB_ROOT_USERNAME: ${KOMODO_DB_USERNAME}
       MONGO_INITDB_ROOT_PASSWORD: ${KOMODO_DB_PASSWORD}
     volumes:
-      # State → the Dell (golden rule): Core's DB in named volumes on this host.
       - komodo-mongo-data:/data/db
       - komodo-mongo-config:/data/configdb
-    # No published ports — Mongo is reachable only by Core on the internal network.
 
   core:
     image: ghcr.io/moghtech/komodo-core:2
+    init: true
     restart: unless-stopped
     depends_on:
       - mongo
     networks:
-      # `default` keeps Core↔Mongo on the internal network; `traefik` lets the
-      # edge proxy reach Core at komodo.ragnaforge.xyz (LAN/Tailscale only).
       - default
       - traefik
     labels:
-      - komodo.skip   # never let Komodo self-manage the bootstrap control plane
-      # --- Traefik: serve Core over HTTPS at komodo.ragnaforge.xyz (also fixes the
-      # API-key "copy needs a secure context" issue). :9120 stays published for
-      # direct LAN/Tailscale access + the out-of-band bootstrap flow. ---
+      - komodo.skip
       - "traefik.enable=true"
       - "traefik.http.routers.komodo.rule=Host(`komodo.ragnaforge.xyz`)"
       - "traefik.http.routers.komodo.entrypoints=websecure"
       - "traefik.http.routers.komodo.tls=true"
       - "traefik.http.services.komodo.loadbalancer.server.port=9120"
-      # Core is multi-homed (default + traefik) — tell Traefik which network to use.
       - "traefik.docker.network=traefik"
     ports:
-      # Published for LAN + Tailscale reach. NOT router-forwarded → not public.
       - "9120:9120"
-    env_file:
-      # Non-secret Core configuration (host, title, DB name, registration toggle).
-      - core.env
     environment:
-      # Secrets — resolved from the mise-rendered env, never literals (research R7).
+      KOMODO_HOST: https://komodo.ragnaforge.xyz
+      KOMODO_TITLE: Ragnaforge
+      KOMODO_LOCAL_AUTH: "true"
+      KOMODO_DISABLE_USER_REGISTRATION: "true"
+      KOMODO_ENABLE_NEW_USERS: "false"
+      # Core polls git for new commits at this interval (default 1-hr is too slow
+      # for an active repo). Refreshes Core's VIEW only — deploys stay manual.
+      KOMODO_RESOURCE_POLL_INTERVAL: 5-min
       KOMODO_DATABASE_ADDRESS: mongo:27017
-      KOMODO_DATABASE_USERNAME: ${KOMODO_DB_USERNAME:-komodo}
+      KOMODO_DATABASE_DB_NAME: komodo
+      KOMODO_DATABASE_USERNAME: ${KOMODO_DB_USERNAME}
       KOMODO_DATABASE_PASSWORD: ${KOMODO_DB_PASSWORD}
-      # Shared passkey Core presents to each Periphery agent (same value on nodes).
       KOMODO_PASSKEY: ${KOMODO_PASSKEY}
       KOMODO_WEBHOOK_SECRET: ${KOMODO_WEBHOOK_SECRET}
       KOMODO_JWT_SECRET: ${KOMODO_JWT_SECRET}
@@ -76,9 +69,6 @@ volumes:
     name: komodo-mongo-config
 
 networks:
-  # Core↔Mongo internal network (Compose's project default).
   default: {}
-  # Shared edge proxy network — must already exist (`make edge-network`) BEFORE
-  # `make komodo-core`, since Core now attaches to it.
   traefik:
     external: true

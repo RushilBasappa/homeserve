@@ -1,12 +1,3 @@
-# Servers — the nodes Komodo manages, declared in git (research R5; FR-002,
-# FR-003). Komodo's ResourceSync reconciles the live fleet against this file:
-# the managed servers are EXACTLY those declared here. Adding or removing a node
-# is an edit here + bringing its Periphery agent up/down — no re-architecture
-# (FR-011, SC-008).
-#
-# `address` is each node's Periphery endpoint (research R2). Core connects
-# inbound to it over the LAN/Tailscale.
-
 [[server]]
 name = "ragnaforge-dell"
 description = "Dell laptop — Komodo Core host + Periphery. Stateful node (golden rule)."
@@ -15,9 +6,6 @@ tags = ["phase-2"]
 [server.config]
 address = "https://10.0.0.70:8120"
 enabled = true
-# Periphery runs in a container; Docker bind-mounts these host files into it, and
-# each shows up as a duplicate "disk" pointing at the same root filesystem. Ignore
-# them so disk stats report the real disk once, not summed N× (a phantom ~900 GB).
 ignore_mounts = ["/etc/resolv.conf", "/etc/hostname", "/etc/hosts"]
 
 [[server]]
@@ -28,5 +16,4 @@ tags = ["phase-2"]
 [server.config]
 address = "https://10.0.0.71:8120"
 enabled = true
-# See the Dell note above — dedupe the container bind-mount "disks".
 ignore_mounts = ["/etc/resolv.conf", "/etc/hostname", "/etc/hosts"]

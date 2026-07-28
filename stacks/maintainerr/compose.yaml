@@ -27,7 +27,8 @@ services:
     container_name: maintainerr
     restart: unless-stopped
     environment:
-      # Non-secret constants; mirrored in komodo/variables.toml (MEDIA_PUID/PGID/TZ).
+      # Non-secret constants, inlined as literals (Komodo does not interpolate
+      # [[VAR]] into git-pulled composes). Same PUID/PGID/TZ across every media stack.
       PUID: "1000"
       PGID: "1000"
       TZ: America/Los_Angeles

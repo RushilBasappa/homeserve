@@ -46,7 +46,6 @@ deployed by a Komodo that isn't running yet (research R3).
 
 ```sh
 # On the Dell:
-cp komodo/bootstrap/core.env.example komodo/bootstrap/core.env   # non-secret config
 make komodo-core
 ```
 
@@ -70,9 +69,10 @@ is Phase 3.
 1. Open `http://10.0.0.70:9120` and register the **first** user — this is the
    single admin.
 2. Confirm open registration is **off** so no one else can self-register. The
-   bootstrap ships `KOMODO_DISABLE_USER_REGISTRATION=true` in `core.env`; if the
-   very first registration is blocked, flip it to `false` for that one bring-up,
-   register, then set it back to `true` and `make komodo-core` again to redeploy.
+   bootstrap ships `KOMODO_DISABLE_USER_REGISTRATION: "true"` in
+   `core.compose.yaml`; if the very first registration is blocked, flip it to
+   `"false"` for that one bring-up, register, then set it back to `"true"` and
+   `make komodo-core` again to redeploy.
 
 ---
 
@@ -114,7 +114,7 @@ and sync.
 
 > Managed == declared: the servers/stacks Komodo manages are exactly those in
 > `komodo/`. To prove git is the source of truth (US2), change a declared value
-> (e.g. retarget `whoami` in `stacks.toml`, or a value in `variables.toml`),
+> (e.g. retarget `whoami` in `stacks.toml`, or a server's tags in `servers.toml`),
 > commit, re-sync — Core's diff reflects it and applies on confirmation.
 
 ---
@@ -283,8 +283,8 @@ Server addresses are `https://<ip>:8120`, not http.
 
 ### First admin — temporary registration toggle
 
-Core ships `KOMODO_DISABLE_USER_REGISTRATION=true`, which blocks the very first
-registration. We flipped it to `false` in `komodo/bootstrap/core.env`, recreated
+Core ships `KOMODO_DISABLE_USER_REGISTRATION: "true"`, which blocks the very first
+registration. We flipped it to `"false"` in `komodo/bootstrap/core.compose.yaml`, recreated
 Core (`docker compose ... up -d --force-recreate core`), registered the admin in
 the browser, then flipped it back to `true` and recreated Core again.
 

@@ -24,7 +24,8 @@ services:
       # Intel iGPU → QuickSync HW transcode (research R1). Same device Plex uses.
       - /dev/dri:/dev/dri
     environment:
-      # Non-secret constants; mirrored in komodo/variables.toml (MEDIA_PUID/PGID/TZ).
+      # Non-secret constants, inlined as literals (Komodo does not interpolate
+      # [[VAR]] into git-pulled composes). Same PUID/PGID/TZ across every media stack.
       PUID: "1000"
       PGID: "1000"
       TZ: America/Los_Angeles
