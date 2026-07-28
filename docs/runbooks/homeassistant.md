@@ -59,10 +59,18 @@ notes before bumping, never bump blind: <https://www.home-assistant.io/blog/cate
 
 ## Bring-up order
 
-1. **Deploy `traefik` with a container RECREATE.** The new route is an inline `configs:` block, and
-   Komodo materialises inline configs **at container create** — a plain redeploy will **not** pick
-   it up ([[homeserve-inline-configs-need-recreate]]). Use **DestroyStack → DeployStack** on
-   `traefik`. Brief edge downtime; certs survive on the `traefik-acme` volume.
+1. **Deploy `traefik`.** The new route is an inline `configs:` block, and Komodo materialises inline
+   configs **at container create** ([[homeserve-inline-configs-need-recreate]]). A **lone
+   `DeployStack` was sufficient here** (verified 2026-07-27): the same commit also changed the
+   `traefik` service's `configs:` **mount list**, so `compose up -d` saw a changed service
+   definition and recreated the container. Prefer the lone deploy — `DestroyStack` + `DeployStack`
+   back-to-back **races** because `/execute` is async and can leave the edge down.
+
+   ⚠ **Content-only inline-config edits are different.** If you later change only the *content* of
+   `traefik-file-routes` (e.g. add another host-network app) and touch nothing in the service block,
+   `compose up -d` will **not** recreate — the container keeps serving the old routes while Komodo
+   reports success. Force it: `ssh ragnaforge-dell 'docker rm -f traefik'` then `DeployStack`.
+   (This is exactly what happened to `homepage` in step 4.)
 
    Confirm the route landed before moving on:
 
@@ -84,8 +92,18 @@ notes before bumping, never bump blind: <https://www.home-assistant.io/blog/cate
    unit system and time zone, then accept or dismiss the devices HA has already discovered on the
    LAN — seeing a discovery list here is the proof that host networking is doing its job.
 
-4. **Redeploy `homepage`** so the Home Assistant tile appears on the front door (its services list
-   is also an inline config → same **DestroyStack + DeployStack** recreate rule).
+4. **Recreate `homepage`** so the Home Assistant tile appears on the front door. Its services list is
+   an inline config and **only the content changed**, so a plain `DeployStack` is a silent no-op —
+   observed live: Komodo reported success while `docker ps` still showed `Up 14 hours`. Force it:
+
+   ```sh
+   ssh ragnaforge-dell 'docker rm -f homepage'      # stateless — all config is inline
+   # then DeployStack homepage, and verify the config actually landed:
+   ssh ragnaforge-dell 'docker exec homepage grep -A3 "Home Assistant" /app/config/services.yaml'
+   ```
+
+   Verify by reading the file **inside the container**, not by curling `home.ragnaforge.xyz` —
+   Homepage renders its tiles client-side, so the server HTML never contains the tile text.
 
 ---
 
