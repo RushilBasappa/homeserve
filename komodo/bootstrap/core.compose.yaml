@@ -1,18 +1,3 @@
-# Komodo Core — the control plane (Dell only).
-#
-# Bootstrapped OUT-OF-BAND with `make komodo-core`, because Core *is* the
-# orchestrator: it can't be deployed by a Komodo that isn't running yet
-# (research R3). Everything ABOVE the control plane — the whoami test stack and
-# every later app — is Komodo-managed via ResourceSync, not brought up this way.
-#
-# Secrets come from the gitignored `.mise.toml` via `mise exec` (the Makefile
-# target wraps the compose call). Non-secret config lives in `core.env`
-# (copy `core.env.example`; the real `core.env` is gitignored by `*.env`).
-#
-# Exposure (research R7): Core's UI/API is published on :9120 but the router
-# forwards no port to it, so only the LAN (10.0.0.0/24) and Tailscale can reach
-# it — never the public internet. Public domain + TLS is Phase 3.
-
 services:
   mongo:
     image: mongo:8
@@ -20,8 +5,8 @@ services:
     command: --quiet --wiredTigerCacheSizeGB 0.5
     restart: unless-stopped
     environment:
-      # Literal, not ${KOMODO_DB_USERNAME} — the username is not a secret, and the
-      # existing volume's root user was created as `komodo`. Must match core below.
+      # Username is not a secret and is what the DB's root user was created as.
+      # The PASSWORD is — it comes from the gitignored .mise.toml via `mise exec`.
       MONGO_INITDB_ROOT_USERNAME: komodo
       MONGO_INITDB_ROOT_PASSWORD: ${KOMODO_DB_PASSWORD}
     volumes:
@@ -47,13 +32,19 @@ services:
       - "traefik.docker.network=traefik"
     ports:
       - "9120:9120"
-    env_file:
-      # Non-secret Core configuration (host, title, DB name, registration toggle).
-      - core.env
     environment:
+      # --- Non-secret config (was core.env) ---
+      KOMODO_HOST: https://komodo.ragnaforge.xyz
+      KOMODO_TITLE: Ragnaforge
+      KOMODO_LOCAL_AUTH: "true"
+      KOMODO_DISABLE_USER_REGISTRATION: "true"
+      KOMODO_ENABLE_NEW_USERS: "false"
+      # Core polls git for new commits at this interval (default 1-hr is too slow
+      # for an active repo). Refreshes Core's VIEW only — deploys stay manual.
+      KOMODO_RESOURCE_POLL_INTERVAL: 5-min
       KOMODO_DATABASE_ADDRESS: mongo:27017
-      # Literal, not ${KOMODO_DB_USERNAME} — that var is not set anywhere, and the
-      # volume's root user was created as `komodo`. Must match mongo above.
+      KOMODO_DATABASE_DB_NAME: komodo
+      # Must match mongo above: literal username, password from .mise.toml.
       KOMODO_DATABASE_USERNAME: komodo
       KOMODO_DATABASE_PASSWORD: ${KOMODO_DB_PASSWORD}
       KOMODO_PASSKEY: ${KOMODO_PASSKEY}
