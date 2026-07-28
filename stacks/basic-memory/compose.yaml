@@ -3,8 +3,8 @@
 # (cf. wger, resume). Stateful → ragnaforge-dell (golden rule). LAN/VPN-only: Traefik fronts
 # it at memory.ragnaforge.xyz; NO host ports, NO router forward.
 #
-# WHAT IT IS: not a web app — an MCP server that gives AI assistants (Claude Code/Desktop, and
-# potentially the hermit agent) a persistent, human-readable memory. Notes are plain Markdown
+# WHAT IT IS: not a web app — an MCP server that gives AI assistants (Claude Code/Desktop)
+# a persistent, human-readable memory. Notes are plain Markdown
 # in a knowledge graph (wikilinks + observations); a SQLite index powers semantic search. There
 # is NO browser UI — clients speak MCP over HTTP to /mcp (see the runbook for `claude mcp add`).
 #

@@ -24,7 +24,7 @@
 # EDGE 16 (Maintainerr → qBittorrent): wired here. When Maintainerr deletes media it
 # tells Radarr/Sonarr to remove the file, then removes the torrent from qBittorrent so
 # the download-side hardlink goes too (otherwise it lingers and blocks a real space
-# reclaim — see docs/runbooks/hermit.md and the arr stack's hardlink model). Maintainerr
+# reclaim — see the arr stack's hardlink model). Maintainerr
 # treats a torrent as "done seeding" using qBit's OWN ratio/seed-time limits; the
 # fallback_ratio (schema min 0.5) only applies when qBit enforces no limit — so this
 # pairs with the seed-time stop set in stacks/arr/configure/qbit-setup.yml.

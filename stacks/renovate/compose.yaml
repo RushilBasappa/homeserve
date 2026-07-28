@@ -1,5 +1,5 @@
 # renovate — self-hosted Renovate: opens PRs that bump the pinned image tags in this
-# repo's compose files (and stacks/hermit/Dockerfile), so upgrades stay the house way —
+# repo's compose files, so upgrades stay the house way —
 # review a PR → merge → Komodo deploys. Complements WUD (WUD = dashboard/notify; Renovate
 # = the actual git tag-bump PRs). Config it applies to the repo lives in /renovate.json.
 #

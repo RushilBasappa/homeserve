@@ -29,3 +29,5 @@ acme.json
 Thumbs.db
 *.swp
 *.tmp
+
+.playwright-mcp/

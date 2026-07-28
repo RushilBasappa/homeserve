@@ -196,3 +196,15 @@ WGER_SECRET_KEY = "changeme-wger-django-secret-key-100hex"
 # wger PostgreSQL password — used by the `db` service AND the web/celery app (one value,
 # referenced as ${WGER_POSTGRES_PASSWORD} in both). Generate:  openssl rand -hex 32
 WGER_POSTGRES_PASSWORD = "changeme-wger-postgres-password-64hex"
+
+# --- resume: Reactive Resume self-hosted résumé builder ---
+# Three container-referenced values, forwarded to the Periphery env and read in
+# stacks/resume/compose.yaml as ${VAR}. All three: openssl rand -hex 32.
+#
+# Better Auth signing secret (session/JWT signing).
+RESUME_AUTH_SECRET = "changeme-resume-auth-secret-64hex"
+# resume PostgreSQL password — used by the `postgres` service AND the app's DATABASE_URL
+# (one value, referenced as ${RESUME_POSTGRES_PASSWORD} in both).
+RESUME_POSTGRES_PASSWORD = "changeme-resume-postgres-password-64hex"
+# At-rest crypto for saved AI providers in the optional /agent workspace.
+RESUME_ENCRYPTION_SECRET = "changeme-resume-encryption-secret-64hex"

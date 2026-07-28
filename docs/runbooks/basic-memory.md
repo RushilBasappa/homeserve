@@ -2,7 +2,7 @@
 
 A single **Dell-only**, **LAN/VPN-only** stack. Basic Memory is **not a web app** — it's an
 [MCP](https://modelcontextprotocol.io) server that gives AI assistants (Claude Code / Claude
-Desktop, and potentially the hermit agent) a persistent, human-readable memory: plain **Markdown**
+Desktop) a persistent, human-readable memory: plain **Markdown**
 notes forming a knowledge graph (wikilinks + observations), indexed in **SQLite** for search.
 
 Upstream: <https://github.com/basicmachines-co/basic-memory> · Operating the fleet: [[homeserve-ops-access]].

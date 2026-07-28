@@ -382,7 +382,7 @@ webhook_enabled = false
 
 # ============================================================================
 # resume — Reactive Resume, a self-hosted résumé builder (spec-free ADDED app,
-# cf. wger/hermit). Stateful → ragnaforge-dell (golden rule). ONE stack, THREE
+# cf. wger). Stateful → ragnaforge-dell (golden rule). ONE stack, THREE
 # services (app+postgres+redis); v5 needs NO Chrome printer and NO S3 store
 # (local-filesystem storage on a Dell volume). Traefik fronts the app at
 # resume.ragnaforge.xyz; LAN/VPN-only, no router forward. Self-migrates on boot.
@@ -405,7 +405,7 @@ webhook_enabled = false
 # basic-memory — self-hosted MCP knowledge-graph server (spec-free ADDED app).
 # Stateful → ragnaforge-dell (golden rule). ONE service, NO web UI: it speaks MCP
 # over streamable-http at memory.ragnaforge.xyz/mcp so AI clients (Claude Code/
-# Desktop, hermit) get a persistent Markdown memory. NO secrets (SQLite). HTTP has
+# Desktop) get a persistent Markdown memory. NO secrets (SQLite). HTTP has
 # NO auth → LAN/VPN-only via Traefik, no router forward (the tailnet is the trust
 # boundary). Bring-up + `claude mcp add` wiring in docs/runbooks/basic-memory.md.
 # Manual (webhook_enabled=false).

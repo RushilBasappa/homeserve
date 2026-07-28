@@ -6,7 +6,7 @@
 # hardlink-friendly save paths under /data, and a short seed-time share limit so
 # torrents STOP shortly after completing (Maintainerr only removes a torrent it sees
 # as done seeding — a still-seeding torrent is skipped, leaving the download-side
-# hardlink alive and blocking a real cascade delete; see docs/runbooks/hermit.md).
+# hardlink alive and blocking a real cascade delete).
 #
 # CREDS: MEDIA_ADMIN_PASSWORD (shared media login) from the workstation .mise.toml.
 # qBit's WebUI username stays `admin` (qBit default).

@@ -7,7 +7,7 @@ the **first-run signup lockdown**, and the correctness/security audits.
 Upstream: <https://github.com/AmruthPillai/Reactive-Resume> · Operating the fleet: [[homeserve-ops-access]].
 
 > This is an **added app** riding the existing platform (edge/DNS/TLS/Komodo), **not** a formal PLAN
-> phase (cf. wger, hermit).
+> phase (cf. wger).
 
 **Why so lean vs the old guides:** most self-host walkthroughs online are for **v4**, which bundled a
 `browserless`/Chrome service for PDF export and a Minio/S3 store. **v5 needs neither** — printing is

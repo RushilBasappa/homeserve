@@ -1,6 +1,6 @@
 # resume — Reactive Resume, a self-hosted résumé builder (AmruthPillai/Reactive-Resume).
 # An ADDED app riding the existing platform (edge/DNS/TLS/Komodo) — NOT a formal PLAN
-# phase (cf. wger, hermit). Stateful → ragnaforge-dell (golden rule). LAN/VPN-only:
+# phase (cf. wger). Stateful → ragnaforge-dell (golden rule). LAN/VPN-only:
 # Traefik fronts it at resume.ragnaforge.xyz; NO host ports, NO router forward.
 #
 # TOPOLOGY — v5 is much leaner than the v4 guides still floating around (which bundled a
