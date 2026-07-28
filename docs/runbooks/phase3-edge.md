@@ -60,9 +60,9 @@ bound; `sysctl net.ipv4.ip_forward` = 1.
 Each edge stack is deployed from Komodo Core (git source of truth). Bring-up
 findings (2026-07-19), so future deploys are smooth:
 
-- **Core polls git every 5 min** (`KOMODO_RESOURCE_POLL_INTERVAL: 5-min` in
-  `komodo/bootstrap/core.compose.yaml`; Komodo's default was 1-hr, which served
-  stale commits long after a push). So after `git push`, wait ≤5 min and Core's view is current — a
+- **Core polls git every 5 min** (`KOMODO_RESOURCE_POLL_INTERVAL=5-min` in
+  `core.env`; Komodo's default was 1-hr, which served stale commits long after a
+  push). So after `git push`, wait ≤5 min and Core's view is current — a
   `DeployStack` then uses the latest code. To pick up a push immediately, run the
   `homeserve` ResourceSync (Komodo UI → Syncs → Execute, or API `RunSync`), which
   reconciles `komodo/stacks.toml` and refreshes the clone. RunSync is required

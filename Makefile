@@ -51,8 +51,7 @@ check: deps
 
 # --- Phase 2: Komodo control plane (run on the target node) ---
 
-# Dell only. All non-secret config is inlined in core.compose.yaml; secrets come
-# from .mise.toml via `mise exec`. No file to copy first.
+# Dell only. Requires komodo/bootstrap/core.env (cp from core.env.example first).
 komodo-core:
 	$(KOMODO_CORE_COMPOSE) up -d
 

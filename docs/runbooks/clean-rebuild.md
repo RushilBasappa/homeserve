@@ -14,9 +14,9 @@ Needs: SSH to each node, this repo, a filled `.mise.toml`.
 4. **Edge network first** (Dell) — Core now attaches to it, so create it BEFORE Core:
    `make edge-network`   (creates the `traefik` network)
 
-5. **Komodo Core** (Dell): `make komodo-core`
+5. **Komodo Core** (Dell): `cp komodo/bootstrap/core.env.example komodo/bootstrap/core.env && make komodo-core`
    - http://10.0.0.70:9120 → register first user (= admin).
-     If blocked: set `KOMODO_DISABLE_USER_REGISTRATION: "false"` in `core.compose.yaml`, recreate, register, set back `"true"`, recreate.
+     If blocked: set `KOMODO_DISABLE_USER_REGISTRATION=false` in core.env, recreate, register, set back `true`, recreate.
    - Create an API key. **The Copy button doesn't work** — open DevTools (Inspect)
      and read the **key** and **secret** out of the page. Put them in `.mise.toml`
      as `KOMODO_API_KEY` / `KOMODO_API_SECRET`.
