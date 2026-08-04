@@ -1,0 +1,99 @@
+# ntfy — self-hosted pub/sub PUSH notifications (the fleet's alerting sink).
+# Dell-only (stateful: user db + message cache, golden rule).
+#
+# WHY: several stacks want to reach the operator's PHONE, not a dashboard —
+# changedetection.io (visa-slot / any watched-URL alerts) is the first consumer.
+# ntfy is the generic sink: publishers POST to a topic, the ntfy app subscribes.
+# Anything that can `curl` can publish, so future stacks reuse it for free.
+#
+# LOCKED DOWN BY DEFAULT: since headscale made :443 publicly router-forwarded,
+# every Traefik vhost is reachable from the internet by Host header. A default
+# ntfy is WIDE OPEN (any caller may publish to or read any topic), so this one
+# runs NTFY_AUTH_DEFAULT_ACCESS=deny-all + NTFY_ENABLE_SIGNUP=false: nothing
+# works until named users are created with the CLI (first-run steps below).
+#
+# DELIBERATELY NOT ipAllowList-GATED (unlike wud/headplane): the whole point is
+# that alerts reach the phone from ANY network — coffee shop, cell data, abroad.
+# Gating it to LAN/tailnet would make it useless exactly when it matters. The
+# deny-all ACL is what carries the security here, not the network position.
+#
+# FIRST RUN (once, on the Dell — no accounts exist until you do this):
+#   docker exec -it ntfy ntfy user add --role=admin admin        # UI/CLI owner
+#   docker exec -it ntfy ntfy user add visabot                   # publisher only
+#   docker exec -it ntfy ntfy access visabot visa wo             # write-only on `visa`
+#   docker exec -it ntfy ntfy token add visabot                  # -> NTFY_VISA_TOKEN
+# Put that token in .mise.toml as NTFY_VISA_TOKEN and paste it into
+# changedetection's notification URL (see stacks/changedetection/compose.yaml).
+# Subscribe on the phone: add server https://ntfy.ragnaforge.xyz, topic `visa`,
+# log in as `admin` (a read-capable user).
+#
+# STATE: ntfy-data holds user.db (accounts/ACLs/tokens) — losing it means
+# re-creating every user and re-issuing every token. ntfy-cache holds the
+# message cache + attachments and is disposable.
+#
+# IMAGE TAG: pinned (no :latest) per Diun/Renovate intent.
+# https://github.com/binwiederhier/ntfy/releases
+#
+# FULL RUNBOOK (bring-up order, ACL audits, adding publishers, backups gap):
+# docs/runbooks/alerting.md
+
+services:
+  ntfy:
+    image: binwiederhier/ntfy:v2.26.3
+    container_name: ntfy
+    restart: unless-stopped
+    command: ["serve"]
+    environment:
+      TZ: America/Los_Angeles
+      # External URL — used in click actions, attachment links and the web app.
+      NTFY_BASE_URL: https://ntfy.ragnaforge.xyz
+      # Listen plain HTTP inside Docker; Traefik terminates TLS.
+      NTFY_LISTEN_HTTP: ":80"
+      # Trust X-Forwarded-For from Traefik (correct client IPs in rate limiting).
+      NTFY_BEHIND_PROXY: "true"
+      # --- access control: nothing is public ---
+      NTFY_AUTH_FILE: /var/lib/ntfy/user.db
+      NTFY_AUTH_DEFAULT_ACCESS: deny-all
+      NTFY_ENABLE_SIGNUP: "false"
+      NTFY_ENABLE_LOGIN: "true"
+      # --- message cache (disposable) ---
+      NTFY_CACHE_FILE: /var/cache/ntfy/cache.db
+      NTFY_CACHE_DURATION: 24h
+      NTFY_ATTACHMENT_CACHE_DIR: /var/cache/ntfy/attachments
+      # iOS ONLY — Apple forbids the background connection ntfy uses on Android,
+      # so the iOS app gets its wake-ups via APNs through ntfy.sh. This forwards
+      # a POLL REQUEST (a SHA-256 topic hash and nothing else — no title, body or
+      # priority) to ntfy.sh; the phone then fetches the real message from THIS
+      # server. Comment it out if the alerting phone is Android-only.
+      NTFY_UPSTREAM_BASE_URL: https://ntfy.sh
+    volumes:
+      # Accounts, ACLs and access tokens — the part worth backing up.
+      - ntfy-data:/var/lib/ntfy
+      # Message cache + attachments — disposable.
+      - ntfy-cache:/var/cache/ntfy
+    networks:
+      - traefik
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:80/v1/health | grep -q '\"healthy\":true'"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    labels:
+      # ntfy.ragnaforge.xyz — reachable from ANY network on purpose (see header);
+      # the deny-all ACL is the gate. ntfy listens on :80 in the container.
+      - "traefik.enable=true"
+      - "traefik.http.routers.ntfy.rule=Host(`ntfy.ragnaforge.xyz`)"
+      - "traefik.http.routers.ntfy.entrypoints=websecure"
+      - "traefik.http.routers.ntfy.tls=true"
+      - "traefik.http.services.ntfy.loadbalancer.server.port=80"
+
+volumes:
+  # Local named volumes on the Dell (golden rule: state → the Dell).
+  ntfy-data:
+  ntfy-cache:
+
+networks:
+  # Shared external proxy network — no host ports.
+  traefik:
+    external: true

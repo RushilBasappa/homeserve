@@ -453,3 +453,52 @@ git_provider = "github.com"
 branch = "main"
 file_paths = ["stacks/homeassistant/compose.yaml"]
 webhook_enabled = false
+
+# ============================================================================
+# ntfy + changedetection — the alerting pair (spec-free ADDED apps, cf. resume/
+# basic-memory/homeassistant). Both stateful → ragnaforge-dell (golden rule).
+#
+# ntfy is the generic PUSH sink (phone notifications); changedetection is the
+# first publisher into it (poll a URL, alert on change — the US visa-slot watch).
+# DEPLOY ORDER: ntfy FIRST, run its first-run `ntfy user add` / `ntfy token add`
+# steps, then changedetection — its notification URL needs that token.
+#
+# NO container-referenced secrets in either compose: ntfy's accounts live in its
+# own user.db (created by CLI) and changedetection's watch headers + notification
+# URL are entered in its UI and stored in the datastore. So nothing is added to
+# komodo/bootstrap/periphery.compose.yaml; NTFY_VISA_TOKEN sits in .mise.toml
+# purely so the operator/runbook has one place to keep it.
+#
+# ⚠ The watches are NOT in git (changedetection has no declarative config). The
+# datastore volume is the source of truth — back it up, and keep the watch recipe
+# in the runbook. Manual deploys (webhook_enabled=false).
+#
+# Bring-up, ACL setup, the visa-watch recipe and the audits:
+# docs/runbooks/alerting.md. ntfy is the PLAN Phase-9 sink landing early — Phase 9's
+# Uptime Kuma / Beszel thresholds publish into THIS instance, not a second one.
+# ============================================================================
+[[stack]]
+name = "ntfy"
+description = "ntfy — self-hosted push-notification sink (deny-all ACL; reachable from any network on purpose so alerts land on the phone off-LAN)."
+tags = ["phase-9", "alerting"]
+
+[stack.config]
+server = "ragnaforge-dell"
+repo = "RushilBasappa/homeserve"
+git_provider = "github.com"
+branch = "main"
+file_paths = ["stacks/ntfy/compose.yaml"]
+webhook_enabled = false
+
+[[stack]]
+name = "changedetection"
+description = "changedetection.io — URL change watcher (US visa-slot alerts) publishing to ntfy; dashboard LAN/Tailscale only."
+tags = ["apps", "alerting"]
+
+[stack.config]
+server = "ragnaforge-dell"
+repo = "RushilBasappa/homeserve"
+git_provider = "github.com"
+branch = "main"
+file_paths = ["stacks/changedetection/compose.yaml"]
+webhook_enabled = false

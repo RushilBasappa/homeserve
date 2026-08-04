@@ -234,6 +234,9 @@ Apps stood up on the existing platform outside the original roadmap — same hou
 ### Phase 9 — Alerting (up/down + push)
 **Objective:** know when a disk fills or an app dies — on your phone.
 - **Uptime Kuma** (service up/down probes) → **ntfy** (self-hosted push to phone app).
+- ⚠ **ntfy already landed early** (`stacks/ntfy`, `docs/runbooks/alerting.md`) — pulled
+  forward by the changedetection.io visa-slot watch, which needed a push sink. This phase
+  publishes into that instance; do **not** stand up a second one.
 - Wire alert rules into ntfy: **Beszel** thresholds from Phase 6 (disk > 85%,
   sustained high load), any Uptime-Kuma-monitored service down, optionally select
   Tautulli events.

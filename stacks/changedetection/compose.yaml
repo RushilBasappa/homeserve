@@ -1,0 +1,135 @@
+# changedetection.io — poll a URL on a schedule, alert only when the content CHANGES.
+# Dell-only (stateful: the watch datastore, golden rule).
+#
+# DRIVING USE CASE: US visa (H-4) appointment-slot alerts off the PUBLIC page
+# https://checkvisaslots.com/latest-us-visa-availability/h-4-regular/ — no account, no
+# extension API key, nothing scraped from the government site. It is a general watcher
+# though: any URL worth being told about becomes another watch.
+#
+# ⚠ THIS PAGE REQUIRES A REAL BROWSER — hence the sockpuppetbrowser sidecar below.
+# The site is Next.js on Vercel behind a bot challenge: a plain HTTP fetch gets
+#     HTTP/2 429 · server: Vercel · x-vercel-mitigated: challenge
+#     <title>Vercel Security Checkpoint</title>
+# on the FIRST request — it is a JS proof-of-work interstitial, not a rate limit, so no
+# amount of backing off or User-Agent spoofing gets past it. A headless Chromium solves
+# it automatically (verified). There is also no anonymous JSON API to fall back on: the
+# table is server-rendered into the RSC payload, and /api/slot-booking/status/ is 401
+# (logged-in booking only). Browser or nothing.
+#
+# WATCHES LIVE IN THE DATASTORE, NOT IN GIT — the one honest gap versus the rest of the
+# fleet. changedetection has no declarative config file; watches, filters and
+# notification URLs are created in the UI and persist in changedetection-data. Treat
+# that volume as real state and keep the recipe below written down.
+#
+# THE VISA WATCH (configure once in the UI — full walkthrough in the runbook):
+#   URL           https://checkvisaslots.com/latest-us-visa-availability/h-4-regular/
+#   Fetcher       "Playwright/Sockpuppet" (NOT the default plain requests fetcher)
+#   Filter        td:nth-child(-n+5)
+#   Trigger       "Send notification when filter text CHANGES"
+#   Notification  ntfy://<NTFY_VISA_TOKEN>@ntfy/visa
+#   Interval      5 minutes
+#
+# WHY THAT FILTER — the page has exactly ONE table, 7 columns:
+#   1 Visa Location · 2 Visa Type · 3 Earliest Date · 4 Slots on Earliest Date
+#   5 Total Dates Available · 6 Last Seen At · 7 Relative Time
+# Columns 6-7 are CHURN: "58 mins ago" re-renders on every single load, and the page
+# footer stamps "The current info is generated at <now>". Watch the raw page and it
+# alerts every 5 minutes forever while meaning nothing. `td:nth-child(-n+5)` keeps only
+# columns 1-5, so "the text changed" reduces to "a location's earliest date or slot
+# count actually moved" — which is the alert you want. Dropping column 6 also means no
+# alert when the SAME availability is merely re-confirmed.
+#
+# INTERVAL: the page says it refreshes every 2 minutes; 5 is the sane poll. Each check
+# is a full headless Chrome page load (the site pulls in analytics/ad tags), so faster
+# polling costs real RAM/CPU on a 7.5 GB node and buys at most ~3 minutes of latency.
+#
+# LAN/TAILNET-ONLY: admin dashboard, gated by an ipAllowList (LAN + tailnet), same
+# posture as wud/headplane. The ALERTS still reach the phone from anywhere — those go
+# out through ntfy, which is deliberately not gated. Set a UI password anyway
+# (Settings -> General) so any LAN device can't rewrite the watches.
+#
+# IMAGE TAGS: pinned (no :latest) per Diun/Renovate intent.
+# https://github.com/dgtlmoon/changedetection.io/releases
+#
+# FULL RUNBOOK (bring-up order, the visa-watch recipe, audits, backups gap):
+# docs/runbooks/alerting.md
+
+services:
+  changedetection:
+    image: dgtlmoon/changedetection.io:0.55.8
+    container_name: changedetection
+    restart: unless-stopped
+    depends_on:
+      - sockpuppetbrowser
+    environment:
+      TZ: America/Los_Angeles
+      # External URL — baked into notification bodies so the alert links back here.
+      BASE_URL: https://changedetection.ragnaforge.xyz
+      # Honour Traefik's X-Forwarded-* headers (correct scheme/host behind the proxy).
+      USE_X_SETTINGS: "1"
+      # Hands the "Playwright/Sockpuppet" fetcher to the sidecar. Without this the
+      # fetcher dropdown has no browser option and the visa watch gets the Vercel
+      # challenge page instead of the table.
+      PLAYWRIGHT_DRIVER_URL: ws://sockpuppetbrowser:3000
+      # Don't leak this instance's URL as a Referer to the sites being watched.
+      HIDE_REFERER: "true"
+      # Concurrent fetch workers — keep low: each browser fetch is a Chrome tab.
+      FETCH_WORKERS: "4"
+    volumes:
+      # Watches, history snapshots, notification URLs — real state.
+      - changedetection-data:/datastore
+    networks:
+      # traefik: the dashboard route + reaching `ntfy` for notifications.
+      - traefik
+      # browser: the private link to the fetcher sidecar.
+      - browser
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:5000/"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    labels:
+      # changedetection.ragnaforge.xyz — LAN/tailnet only. Listens on :5000.
+      - "traefik.enable=true"
+      - "traefik.http.routers.changedetection.rule=Host(`changedetection.ragnaforge.xyz`)"
+      - "traefik.http.routers.changedetection.entrypoints=websecure"
+      - "traefik.http.routers.changedetection.tls=true"
+      - "traefik.http.routers.changedetection.middlewares=changedetection-lan"
+      - "traefik.http.middlewares.changedetection-lan.ipallowlist.sourcerange=10.0.0.0/24,100.64.0.0/10,127.0.0.1/32"
+      - "traefik.http.services.changedetection.loadbalancer.server.port=5000"
+
+  # Headless Chromium that changedetection drives over a websocket — upstream's own
+  # companion image, purpose-built for this (a plain browserless works too).
+  # NOT on the traefik network and NO Traefik labels: nothing but changedetection
+  # should ever reach it. It has internet egress via the `browser` bridge, which is
+  # all it needs to fetch watched pages.
+  sockpuppetbrowser:
+    image: dgtlmoon/sockpuppetbrowser:0.0.3
+    container_name: sockpuppetbrowser
+    restart: unless-stopped
+    # Chrome's sandbox needs this; without it the browser dies on launch.
+    cap_add:
+      - SYS_ADMIN
+    # Chrome crashes on the 64 MB default /dev/shm when a page has many tabs/images.
+    shm_size: 2gb
+    environment:
+      TZ: America/Los_Angeles
+      SCREEN_WIDTH: "1920"
+      SCREEN_HEIGHT: "1024"
+      SCREEN_DEPTH: "16"
+      # Reap abandoned tabs so a hung fetch can't leak a Chrome process forever.
+      MAX_CONCURRENT_CHROME_PROCESSES: "4"
+    networks:
+      - browser
+
+volumes:
+  # Local named volume on the Dell (golden rule: state → the Dell).
+  changedetection-data:
+
+networks:
+  # Shared external proxy network — no host ports.
+  traefik:
+    external: true
+  # Private app-local bridge: changedetection <-> sockpuppetbrowser only.
+  browser:
