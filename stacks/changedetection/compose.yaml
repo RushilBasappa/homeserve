@@ -6,15 +6,27 @@
 # extension API key, nothing scraped from the government site. It is a general watcher
 # though: any URL worth being told about becomes another watch.
 #
-# ⚠ THIS PAGE REQUIRES A REAL BROWSER — hence the sockpuppetbrowser sidecar below.
-# The site is Next.js on Vercel behind a bot challenge: a plain HTTP fetch gets
-#     HTTP/2 429 · server: Vercel · x-vercel-mitigated: challenge
-#     <title>Vercel Security Checkpoint</title>
-# on the FIRST request — it is a JS proof-of-work interstitial, not a rate limit, so no
-# amount of backing off or User-Agent spoofing gets past it. A headless Chromium solves
-# it automatically (verified). There is also no anonymous JSON API to fall back on: the
-# table is server-rendered into the RSC payload, and /api/slot-booking/status/ is 401
-# (logged-in booking only). Browser or nothing.
+# NO BROWSER SIDECAR — and that is a deliberate, measured decision, not an omission.
+# The page LOOKS like it needs one (Next.js on Vercel behind a bot challenge), and a
+# `sockpuppetbrowser` sidecar was built, deployed and then REMOVED after measurement:
+#   * From a laptop/workstation IP a plain fetch gets HTTP 429 + `x-vercel-mitigated:
+#     challenge` — the "Vercel Security Checkpoint" interstitial. That is what makes
+#     the browser look mandatory.
+#   * From the DELL, changedetection's plain `html_requests` fetcher gets the REAL
+#     page, ~10 KB of text with the full availability table in it. The table is
+#     server-rendered, so no JS execution is needed at all.
+#   * The browser path was strictly WORSE: headless Chrome (and headful under Xvfb)
+#     received a stripped, unhydrated shell — 19 bytes of text — so the filter matched
+#     nothing and the watch silently never fired.
+# Net: the plain fetcher is the one that works here, and it costs no Chrome, no
+# `shm_size: 2gb`, no SYS_ADMIN capability on a 7.5 GB node. If the Dell's IP ever
+# starts getting challenged, revisit — but measure before adding a browser back.
+#
+# ⚠ THE SITE RATE-LIMITS: rapid rechecks earn `HTTP error code 429 (Access denied or
+# blocked)`. At the 5-minute interval below this is not hit; hammering the recheck
+# button is what triggers it. changedetection keeps the last good snapshot and retries
+# on the next cycle, so an occasional 429 is self-healing — do not "fix" it by adding
+# retries or a browser.
 #
 # WATCHES LIVE IN THE DATASTORE, NOT IN GIT — the one honest gap versus the rest of the
 # fleet. changedetection has no declarative config file; watches, filters and
@@ -23,7 +35,7 @@
 #
 # THE VISA WATCH (configure once in the UI — full walkthrough in the runbook):
 #   URL           https://checkvisaslots.com/latest-us-visa-availability/h-4-regular/
-#   Fetcher       "Playwright/Sockpuppet" (NOT the default plain requests fetcher)
+#   Fetcher       Basic fast Plaintext/HTTP Client  (NOT a browser — see above)
 #   Filter        td:nth-child(-n+5)
 #   Trigger       "Send notification when filter text CHANGES"
 #   Notification  ntfy://<NTFY_VISA_TOKEN>@ntfy/visa
@@ -32,23 +44,19 @@
 # WHY THAT FILTER — the page has exactly ONE table, 7 columns:
 #   1 Visa Location · 2 Visa Type · 3 Earliest Date · 4 Slots on Earliest Date
 #   5 Total Dates Available · 6 Last Seen At · 7 Relative Time
-# Columns 6-7 are CHURN: "58 mins ago" re-renders on every single load, and the page
-# footer stamps "The current info is generated at <now>". Watch the raw page and it
+# Columns 6-7 are CHURN: "29 mins ago" re-renders on every single load, and the page
+# also stamps "The current info is generated at <now>". Watch the raw page and it
 # alerts every 5 minutes forever while meaning nothing. `td:nth-child(-n+5)` keeps only
 # columns 1-5, so "the text changed" reduces to "a location's earliest date or slot
 # count actually moved" — which is the alert you want. Dropping column 6 also means no
 # alert when the SAME availability is merely re-confirmed.
 #
-# INTERVAL: the page says it refreshes every 2 minutes; 5 is the sane poll. Each check
-# is a full headless Chrome page load (the site pulls in analytics/ad tags), so faster
-# polling costs real RAM/CPU on a 7.5 GB node and buys at most ~3 minutes of latency.
+# LAN/TAILNET-ONLY: the dashboard is an unauthenticated request-forwarder by default,
+# so it is gated by an ipAllowList (LAN + tailnet), same posture as wud/headplane. The
+# ALERTS still reach the phone from anywhere — those go out through ntfy, which is
+# deliberately not gated. Set a UI password too (Settings -> General).
 #
-# LAN/TAILNET-ONLY: admin dashboard, gated by an ipAllowList (LAN + tailnet), same
-# posture as wud/headplane. The ALERTS still reach the phone from anywhere — those go
-# out through ntfy, which is deliberately not gated. Set a UI password anyway
-# (Settings -> General) so any LAN device can't rewrite the watches.
-#
-# IMAGE TAGS: pinned (no :latest) per Diun/Renovate intent.
+# IMAGE TAG: pinned (no :latest) per Diun/Renovate intent.
 # https://github.com/dgtlmoon/changedetection.io/releases
 #
 # FULL RUNBOOK (bring-up order, the visa-watch recipe, audits, backups gap):
@@ -59,41 +67,28 @@ services:
     image: dgtlmoon/changedetection.io:0.55.8
     container_name: changedetection
     restart: unless-stopped
-    depends_on:
-      - sockpuppetbrowser
     environment:
       TZ: America/Los_Angeles
       # External URL — baked into notification bodies so the alert links back here.
       BASE_URL: https://changedetection.ragnaforge.xyz
       # Honour Traefik's X-Forwarded-* headers (correct scheme/host behind the proxy).
       USE_X_SETTINGS: "1"
-      # Hands the "Playwright/Sockpuppet" fetcher to the sidecar. Without this the
-      # fetcher dropdown has no browser option and the visa watch gets the Vercel
-      # challenge page instead of the table.
-      #
-      # NOTE: sockpuppetbrowser already passes --disable-gpu and --no-sandbox itself,
-      # so no `?--flag` query params are needed here. The `GPU process isn't usable.
-      # Goodbye.` lines in its log are SHUTDOWN NOISE (they appear after "Killing N
-      # Chrome child processes"), not a fetch failure — don't chase them.
-      PLAYWRIGHT_DRIVER_URL: ws://sockpuppetbrowser:3000
       # Don't leak this instance's URL as a Referer to the sites being watched.
       HIDE_REFERER: "true"
-      # Concurrent fetch workers — keep low: each browser fetch is a Chrome tab.
-      FETCH_WORKERS: "4"
+      # Concurrent fetch workers — a handful of watches needs nothing exotic.
+      FETCH_WORKERS: "10"
     volumes:
       # Watches, history snapshots, notification URLs — real state.
       - changedetection-data:/datastore
     networks:
-      # traefik: the dashboard route + reaching `ntfy` for notifications.
+      # Same network as ntfy, so notifications go to http://ntfy:80 internally.
       - traefik
-      # browser: the private link to the fetcher sidecar.
-      - browser
     healthcheck:
       # ⚠ python3, NOT wget/curl — this image ships NEITHER. A healthcheck that
       # references a missing binary fails forever, Docker marks the container
       # `unhealthy`, and TRAEFIK'S DOCKER PROVIDER SILENTLY SKIPS UNHEALTHY
       # CONTAINERS — so the vhost 404s (no router) instead of 502-ing. That failure
-      # mode reads exactly like a DNS/TLS problem and is not: verify with
+      # mode reads exactly like a DNS/TLS/Cloudflare problem and is not: verify with
       # `docker inspect <c> --format '{{json .State.Health}}'` before blaming the edge.
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/', timeout=5)"]
       interval: 60s
@@ -110,39 +105,6 @@ services:
       - "traefik.http.middlewares.changedetection-lan.ipallowlist.sourcerange=10.0.0.0/24,100.64.0.0/10,127.0.0.1/32"
       - "traefik.http.services.changedetection.loadbalancer.server.port=5000"
 
-  # Headless Chromium that changedetection drives over a websocket — upstream's own
-  # companion image, purpose-built for this (a plain browserless works too).
-  # NOT on the traefik network and NO Traefik labels: nothing but changedetection
-  # should ever reach it. It has internet egress via the `browser` bridge, which is
-  # all it needs to fetch watched pages.
-  sockpuppetbrowser:
-    image: dgtlmoon/sockpuppetbrowser:0.0.3
-    container_name: sockpuppetbrowser
-    restart: unless-stopped
-    # Chrome's sandbox needs this; without it the browser dies on launch.
-    cap_add:
-      - SYS_ADMIN
-    # Chrome crashes on the 64 MB default /dev/shm when a page has many tabs/images.
-    shm_size: 2gb
-    environment:
-      TZ: America/Los_Angeles
-      SCREEN_WIDTH: "1920"
-      SCREEN_HEIGHT: "1024"
-      SCREEN_DEPTH: "16"
-      # Reap abandoned tabs so a hung fetch can't leak a Chrome process forever.
-      MAX_CONCURRENT_CHROME_PROCESSES: "4"
-      # ⚠ HEADFUL under a virtual X server, not headless. The visa page is behind a
-      # Vercel bot challenge that serves a stripped, unhydrated shell to headless
-      # Chrome: the fetch "succeeds" with ~19 bytes of text, the filter matches
-      # nothing, and the watch silently never fires. The SAME chromium binary in
-      # this container renders the page fully (582 KB DOM) when not headless — so
-      # the browser is fine, the headless fingerprint is what gets degraded.
-      # The image's entrypoint starts Xvfb on :99 when either of these is set.
-      CHROME_HEADFUL: "true"
-      ENABLE_XVFB: "true"
-    networks:
-      - browser
-
 volumes:
   # Local named volume on the Dell (golden rule: state → the Dell).
   changedetection-data:
@@ -151,5 +113,3 @@ networks:
   # Shared external proxy network — no host ports.
   traefik:
     external: true
-  # Private app-local bridge: changedetection <-> sockpuppetbrowser only.
-  browser:
