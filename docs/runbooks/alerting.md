@@ -187,7 +187,7 @@ key, not a different URL). Store it as `CHECKVISASLOTS_API_KEY` in `.mise.toml`.
 | **Filter** | `jq:[.slotDetails[] \| select(.slots > 0) \| "\(.visa_location): \(.slots)"] \| if length == 0 then "none" else join(" \| ") end` |
 | **Trigger → Trigger/wait for text** | `/: [1-9]/` |
 | **Notification URL** | `ntfy://<NTFY_VISA_TOKEN>@ntfy/visa` |
-| **Recheck time** | 15 minutes — **quota-bound, see below** |
+| **Recheck time** | 30 minutes — **quota-bound, see below** |
 
 ### Alert only on availability, never on a countdown
 
@@ -213,11 +213,12 @@ This drives the interval, not politeness. Every call decrements
 `userActivity.slots`; the two sum to a fixed allowance. **The reset period is unknown**,
 so the interval is deliberately conservative:
 
-| Interval | Calls/day |
-|---|---|
-| 5 min | 288 |
-| 15 min | 96 |
-| 60 min | 24 |
+| Interval | Calls/day | Days from a full 437 allowance |
+|---|---|---|
+| 5 min | 288 | ~1.5 |
+| 15 min | 96 | ~4.5 |
+| **30 min** (current) | **48** | **~9** |
+| 60 min | 24 | ~18 |
 
 Your **own browser extension draws on the same allowance**, so real burn is higher than
 this stack alone. Check the balance with a single call:

@@ -30,7 +30,7 @@
 # Every call decrements `userActivity.remaining` by exactly 1 (measured: 412 → 411 →
 # 410) and increments `userActivity.slots`; the two sum to a fixed allowance. The reset
 # period is NOT known, so the interval below is deliberately conservative:
-#     5 min  = 288 calls/day     15 min = 96 calls/day     60 min = 24 calls/day
+#     5 min = 288/day    15 min = 96/day    30 min = 48/day    60 min = 24/day
 # The operator's own browser extension draws on the SAME allowance, so the real burn is
 # higher than this stack alone. Check the balance any time with a single call:
 #   curl -s https://app.checkvisaslots.com/slots/v3 -H "x-api-key: $CHECKVISASLOTS_API_KEY" \
@@ -52,7 +52,7 @@
 #                    | if length == 0 then "none" else join(" | ") end
 #   Trigger text  /: [1-9]/
 #   Notification  ntfy://<NTFY_VISA_TOKEN>@ntfy/visa
-#   Interval      15 minutes  (quota — see above)
+#   Interval      30 minutes  (quota — see above)
 #
 # ALERT ONLY ON AVAILABILITY — two mechanisms, both load-bearing:
 #   * `select(.slots > 0)` means the snapshot lists ONLY locations that actually have
