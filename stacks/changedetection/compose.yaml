@@ -70,7 +70,17 @@ services:
       # Hands the "Playwright/Sockpuppet" fetcher to the sidecar. Without this the
       # fetcher dropdown has no browser option and the visa watch gets the Vercel
       # challenge page instead of the table.
-      PLAYWRIGHT_DRIVER_URL: ws://sockpuppetbrowser:3000
+      #
+      # ⚠ The `?--flag` query params are passed through to Chrome, and the GPU ones
+      # are LOAD-BEARING, not tuning. There is no GPU in this container, and Chrome
+      # aborts the whole page load with
+      #   GPU process launch failed: error_code=1002
+      #   [FATAL:gpu_data_manager_impl_private.cc] GPU process isn't usable. Goodbye.
+      # The fetch then "succeeds" having captured only the pre-hydration HTML shell
+      # (~19 bytes of text), so the filter matches nothing and the watch silently
+      # never fires. Symptom to recognise: "no filters were found" plus a blank,
+      # unstyled last-screenshot.png.
+      PLAYWRIGHT_DRIVER_URL: ws://sockpuppetbrowser:3000?--disable-gpu=true&--disable-software-rasterizer=true
       # Don't leak this instance's URL as a Referer to the sites being watched.
       HIDE_REFERER: "true"
       # Concurrent fetch workers — keep low: each browser fetch is a Chrome tab.
