@@ -18,7 +18,7 @@
 
 services:
   renovate:
-    image: renovate/renovate:43
+    image: renovate/renovate:44
     container_name: renovate
     restart: unless-stopped
     environment:
