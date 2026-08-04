@@ -41,15 +41,11 @@ default and the first-run user creation below are load-bearing, not optional har
 A stock ntfy is **wide open**: any caller may publish to or read any topic. Verify the lockdown
 after deploy ([Audits](#audits-the-invariants)).
 
-**Why changedetection *is* gated.** Its UI has no auth by default, and it ships a **headless
-browser that will fetch any URL you type** — an unauthenticated request-forwarder is not
-something to leave answering on a public vhost. It also holds whatever credentials a future watch
-needs in its request-headers box. So: network-gate it **and** set a UI password (Settings →
-General → password). The **alerts** still escape to the phone from anywhere, because they leave
-via ntfy.
-
-The visa watch itself carries **no credential** — it reads a public page (see
-[The visa watch](#the-visa-watch-changedetection)).
+**Why changedetection *is* gated.** Its UI has no auth by default and will fetch any URL you type
+— an unauthenticated request-forwarder is not something to leave answering on a public vhost.
+More concretely, its datastore holds the **CheckVisaSlots API key** in the watch's request-headers
+box, in the clear. So: network-gate it **and** set a UI password (Settings → General → password).
+The **alerts** still escape to the phone from anywhere, because they leave via ntfy.
 
 ---
 
@@ -59,15 +55,14 @@ The visa watch itself carries **no credential** — it reads a public page (see
   `changedetection.ragnaforge.xyz` resolve via the existing wildcard — **no new DNS records**.
 - `komodo/stacks.toml` has both `[[stack]]` decls (server `ragnaforge-dell`); `RunSync` applied.
 - **No Periphery secrets.** Neither compose references a `${VAR}`, so nothing is added to
-  `komodo/bootstrap/periphery.compose.yaml` and **`make sync-secrets` is not needed**. The single
-  `.mise.toml` value (`NTFY_VISA_TOKEN`) is consumed **by hand** at first-run config — same model
-  as `PLEX_TOKEN` / `MEDIA_ADMIN_*`.
-- **~2 GB RAM headroom on the Dell** for the `sockpuppetbrowser` sidecar (`shm_size: 2gb` plus the
-  Chrome processes themselves). This is the heaviest thing either stack does.
+  `komodo/bootstrap/periphery.compose.yaml` and **`make sync-secrets` is not needed**. Both
+  `.mise.toml` values (`NTFY_VISA_TOKEN`, `CHECKVISASLOTS_API_KEY`) are consumed **by hand** at
+  first-run config — same model as `PLEX_TOKEN` / `MEDIA_ADMIN_*`.
+- Two small containers, no browser — see the compose header for why the browser sidecar was
+  built, measured and removed.
 
 **Verify at deploy** (image-tag discipline): confirm the pinned tags in both compose files are
-current — `binwiederhier/ntfy:v2.26.3`, `dgtlmoon/changedetection.io:0.55.8`,
-`dgtlmoon/sockpuppetbrowser:0.0.3`. Releases:
+current — `binwiederhier/ntfy:v2.26.3`, `dgtlmoon/changedetection.io:0.55.8`. Releases:
 <https://github.com/binwiederhier/ntfy/releases> ·
 <https://github.com/dgtlmoon/changedetection.io/releases>.
 
@@ -125,22 +120,23 @@ else** — no title, body, or priority; the phone then fetches the real message 
 
 ### 4. Deploy changedetection
 
-`DeployStack changedetection` — **two** containers come up, the app and the
-`sockpuppetbrowser` headless-Chrome sidecar.
+`DeployStack changedetection` — one container.
 
-Confirm the sidecar is actually wired in, because a silent failure here just means every
-browser-fetched watch quietly diffs a bot-challenge page:
+⚠ **Check it reports `healthy`, not just `Up`:**
 
 ```bash
-docker logs sockpuppetbrowser | tail          # should show it listening, no crash loop
-docker exec changedetection wget -qO- --spider ws://sockpuppetbrowser:3000 ; echo $?
+docker inspect changedetection --format '{{.State.Health.Status}}'
 ```
 
-Then in the UI, Settings → General:
+This is not a formality. The image ships **neither `wget` nor `curl`**, so a healthcheck
+written the usual way fails forever, Docker marks the container `unhealthy`, and
+**Traefik's Docker provider silently skips unhealthy containers** — the vhost then returns
+Traefik's own `404 page not found` rather than a 502. That looks exactly like a DNS,
+AdGuard or Cloudflare fault and is none of them. (It bit this stack on first deploy; the
+compose now uses `python3` for the check.)
 
-1. **Set a UI password** — before creating any watch. See the security posture above.
-2. Check the fetcher dropdown offers **Playwright/Sockpuppet Chrome**. If it doesn't,
-   `PLAYWRIGHT_DRIVER_URL` didn't take and the visa watch will not work.
+Then in the UI, Settings → General, **set a UI password** before creating any watch — see
+the security posture above; the watch stores the CheckVisaSlots API key in the clear.
 
 ### 5. Create the visa watch
 
@@ -150,92 +146,111 @@ See the next section.
 
 ## The visa watch (changedetection)
 
-**Target:** the **public** availability page —
-<https://checkvisaslots.com/latest-us-visa-availability/h-4-regular/>
+**Target:** the JSON endpoint the CheckVisaSlots **browser extension** polls —
+`https://app.checkvisaslots.com/slots/v3`, authenticated with the subscriber's own
+`x-api-key`. Nothing here touches `ais.usvisa-info.com` with your own session cookie —
+that's what every "visa bot" on GitHub does, and it's what gets accounts locked.
 
-No account, no extension API key, no credential of any kind. And nothing here touches
-`ais.usvisa-info.com` with your own session cookie — that's what every "visa bot" on GitHub does,
-and it's what gets accounts rate-limited or locked.
+### Why not the public HTML page
 
-### Why this needs a browser
+The obvious target is `checkvisaslots.com/latest-us-visa-availability/h-4-regular/`.
+It was tried first, thoroughly, and abandoned. Recorded so nobody repeats it:
 
-A plain HTTP fetch of that URL returns, on the **first** request:
+- It sits behind **Vercel Attack Challenge Mode** — `HTTP 429` +
+  `x-vercel-mitigated: challenge`, a JS proof-of-work interstitial. It **escalates**:
+  once an IP is flagged it stays flagged for many hours, and a plain fetch with a real
+  desktop User-Agent still gets challenged.
+- A browser sidecar did **not** rescue it. Headless Chrome *and* headful-under-Xvfb both
+  returned a stripped, unhydrated shell — 19 bytes of text — so the filter matched
+  nothing and the watch silently never fired.
+- ⚠ The checkpoint page embeds a **unique request ID per fetch** (`sfo1::1785830911-…`).
+  Point a watch at it and *every* check registers as a change: a permanent false-alert
+  generator.
+- `app.checkvisaslots.com` is **not** challenge-gated — it answers `200` with clean JSON
+  from the very same Dell IP the HTML page blocks. That's expected: the extension is
+  itself a non-browser fetch client and can't solve a JS challenge either.
 
-```
-HTTP/2 429
-server: Vercel
-x-vercel-mitigated: challenge
-<title>Vercel Security Checkpoint</title>
-```
+### Getting the API key
 
-That's a **JS proof-of-work interstitial, not a rate limit** — backing off, spoofing a
-User-Agent, or adding delays will never get past it. A headless Chromium solves it
-automatically (verified). Hence the `sockpuppetbrowser` sidecar in the compose file, and hence
-the fetcher setting below: leave it on the default requests fetcher and the watch will happily
-diff the *challenge page* instead of the table.
-
-There's no cleaner JSON endpoint to fall back on either. The table is server-rendered into the
-Next.js RSC payload (so it's plain text in the DOM — good), and `/api/slot-booking/status/`
-returns **401** for anonymous callers (logged-in booking only). Browser or nothing.
+Open the extension popup → DevTools → **Network** → click the XHR → right-click →
+**Copy as cURL**. The `x-api-key` header is the key; it's scoped to your subscription
+(the response echoes `userDetails.visa_type`, so a different visa type means a different
+key, not a different URL). Store it as `CHECKVISASLOTS_API_KEY` in `.mise.toml`.
 
 ### The watch
 
 | Field | Value |
 |---|---|
-| **URL** | `https://checkvisaslots.com/latest-us-visa-availability/h-4-regular/` |
-| **Request → Fetch method** | **Playwright/Sockpuppet Chrome** — *not* the default |
-| **Filters → CSS/XPath** | `td:nth-child(-n+5)` |
-| **Trigger** | *Send notification when filter text changes* |
+| **URL** | `https://app.checkvisaslots.com/slots/v3` |
+| **Fetch method** | Basic fast Plaintext/HTTP Client — **not** a browser |
+| **Request headers** | `x-api-key: <key>`, `origin: chrome-extension://beepaenfejnphdgnkmccjcfiieihhogl`, `extversion: 4.7.3`, a normal desktop `user-agent` |
+| **Filter** | `jq:[.slotDetails[] \| select(.slots > 0) \| "\(.visa_location): \(.slots)"] \| if length == 0 then "none" else join(" \| ") end` |
+| **Trigger → Trigger/wait for text** | `/: [1-9]/` |
 | **Notification URL** | `ntfy://<NTFY_VISA_TOKEN>@ntfy/visa` |
-| **Recheck time** | 5 minutes |
+| **Recheck time** | 15 minutes — **quota-bound, see below** |
+
+### Alert only on availability, never on a countdown
+
+Two mechanisms stack, and both matter:
+
+1. **The `select(.slots > 0)`** in the filter means the snapshot lists *only* locations that
+   actually have slots. With nothing available it collapses to the literal `none`. The
+   `if length == 0` guard is load-bearing — an empty filter result makes changedetection
+   error with *"no filters were found"* instead of recording a clean empty state.
+2. **`trigger_text` = `/: [1-9]/`** suppresses the notification unless the new snapshot
+   contains a non-zero count. Without it you'd also get paged when a slot *disappears*
+   (`CHENNAI VAC: 2` → `none`), which is noise.
+
+Verified in both directions on deploy: all-zeros produced **no** notification, and a
+snapshot of `"CHENNAI VAC: 3"` fired one. Note that with `trigger_text` set, changedetection
+does not advance the stored snapshot on non-triggering checks either — so the diff in the
+alert is against the last *triggering* state, which is what you want.
+
+### ⚠ The endpoint is quota-metered
+
+This drives the interval, not politeness. Every call decrements
+`userActivity.remaining` by exactly 1 (measured: 412 → 411 → 410) and increments
+`userActivity.slots`; the two sum to a fixed allowance. **The reset period is unknown**,
+so the interval is deliberately conservative:
+
+| Interval | Calls/day |
+|---|---|
+| 5 min | 288 |
+| 15 min | 96 |
+| 60 min | 24 |
+
+Your **own browser extension draws on the same allowance**, so real burn is higher than
+this stack alone. Check the balance with a single call:
+
+```bash
+curl -s https://app.checkvisaslots.com/slots/v3 \
+  -H "x-api-key: $CHECKVISASLOTS_API_KEY" \
+  -H "origin: chrome-extension://beepaenfejnphdgnkmccjcfiieihhogl" | jq .userActivity
+```
+
+If `remaining` is falling faster than you like, lengthen the interval — that is the only
+knob.
 
 ### Why that filter
 
-The page has exactly **one** table, with seven columns:
+The raw JSON is mostly churn: every `slotDetails` entry carries a `createdon` timestamp
+and an `imghash` that change on each poll, and `userActivity.remaining` counts *down*
+every call. Watch the raw body and it alerts every cycle forever while meaning nothing.
+The jq expression reduces the response to one line of pure signal:
 
-| # | Column | |
-|---|---|---|
-| 1 | Visa Location | keep |
-| 2 | Visa Type | keep |
-| 3 | Earliest Date | **keep — the thing you care about** |
-| 4 | Slots on Earliest Date | **keep** |
-| 5 | Total Dates Available | **keep** |
-| 6 | Last Seen At | drop |
-| 7 | Relative Time | drop — **churn** |
+```
+"CHENNAI VAC: 0 | HYDERABAD VAC: 0 | KOLKATA VAC: 0 | MUMBAI VAC: 0 | NEW DELHI VAC: 0"
+```
 
-Column 7 (`58 mins ago`) re-renders on *every single load*, and the page footer stamps
-"The current info is generated at &lt;now&gt;". Watch the raw page and it alerts every 5 minutes
-forever while telling you nothing. `td:nth-child(-n+5)` keeps only columns 1–5, so "the text
-changed" reduces to **"a location's earliest date or slot count actually moved."**
-
-Dropping column 6 as well is deliberate: *Last Seen At* updates when the same availability is
-merely re-confirmed, which isn't news. If you'd rather be pinged on re-confirmation too, widen
-the filter to `td:nth-child(-n+6)`.
-
-Two more things worth knowing:
-
-- **The notification URL is container-to-container.** `ntfy` resolves over the shared `traefik`
-  network, so the alert never leaves the Dell on its way out — no TLS hop, no public round trip,
-  and it keeps working even if the edge is down.
-- **5 minutes, not 30 seconds.** The page self-describes as refreshing every 2 minutes, and every
-  check is a full headless Chrome page load (the site pulls in a pile of analytics/ad tags).
-  Faster polling costs real RAM/CPU on a 7.5 GB node and buys at most ~3 minutes of latency.
-
-### Watching a different visa type
-
-The URL slug is the only thing that changes — `/latest-us-visa-availability/<type>/`, e.g.
-`h-1b-regular`, `b1-b2-regular`, `f1-regular`. Clone the watch, swap the slug, and send it to its
-own ntfy topic if you want to mute them independently.
+so "the text changed" means "a slot count moved, or a location appeared/disappeared".
 
 ### Expectation-setting
 
-By the time a slot surfaces on a third-party aggregator, it is often already gone — and the page
-itself says the data is crowdsourced, "may not reflect real-time openings and is for reference
-only." This gets you the alert; booking is still a manual race. Full auto-booking against the
-government site is where the real ToS and account-lockout risk lives, and is deliberately not
-built here.
-
----
+By the time a slot surfaces on a third-party aggregator it is often already gone, and
+CheckVisaSlots itself says the data is crowdsourced and "may not reflect real-time
+openings". This gets you the alert; booking is still a manual race. Auto-booking against
+the government site is where the real ToS and account-lockout risk lives, and is
+deliberately not built here.
 
 ## Adding another publisher
 

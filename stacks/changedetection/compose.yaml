@@ -1,55 +1,81 @@
 # changedetection.io — poll a URL on a schedule, alert only when the content CHANGES.
 # Dell-only (stateful: the watch datastore, golden rule).
 #
-# DRIVING USE CASE: US visa (H-4) appointment-slot alerts off the PUBLIC page
-# https://checkvisaslots.com/latest-us-visa-availability/h-4-regular/ — no account, no
-# extension API key, nothing scraped from the government site. It is a general watcher
-# though: any URL worth being told about becomes another watch.
+# DRIVING USE CASE: US visa (H-4) appointment-slot alerts, sourced from the SAME JSON
+# endpoint the CheckVisaSlots browser extension polls. Nothing is scraped from the
+# government site. It is a general watcher though: any URL worth being told about
+# becomes another watch.
 #
-# NO BROWSER SIDECAR — and that is a deliberate, measured decision, not an omission.
-# The page LOOKS like it needs one (Next.js on Vercel behind a bot challenge), and a
-# `sockpuppetbrowser` sidecar was built, deployed and then REMOVED after measurement:
-#   * From a laptop/workstation IP a plain fetch gets HTTP 429 + `x-vercel-mitigated:
-#     challenge` — the "Vercel Security Checkpoint" interstitial. That is what makes
-#     the browser look mandatory.
-#   * From the DELL, changedetection's plain `html_requests` fetcher gets the REAL
-#     page, ~10 KB of text with the full availability table in it. The table is
-#     server-rendered, so no JS execution is needed at all.
-#   * The browser path was strictly WORSE: headless Chrome (and headful under Xvfb)
-#     received a stripped, unhydrated shell — 19 bytes of text — so the filter matched
+# NO BROWSER SIDECAR — a deliberate, measured decision. The obvious target is the
+# public HTML page (checkvisaslots.com/latest-us-visa-availability/h-4-regular/) and it
+# LOOKS like it needs a browser, so a `sockpuppetbrowser` sidecar was built, deployed,
+# and then REMOVED. What the measurements showed:
+#   * That page sits behind Vercel ATTACK CHALLENGE MODE: `HTTP 429` +
+#     `x-vercel-mitigated: challenge`. It is a JS proof-of-work interstitial that
+#     escalates — once an IP is flagged it stays flagged for many hours.
+#   * The browser path did not rescue it: headless Chrome AND headful-under-Xvfb both
+#     returned a stripped, unhydrated shell (19 bytes of text), so the filter matched
 #     nothing and the watch silently never fired.
-# Net: the plain fetcher is the one that works here, and it costs no Chrome, no
-# `shm_size: 2gb`, no SYS_ADMIN capability on a 7.5 GB node. If the Dell's IP ever
-# starts getting challenged, revisit — but measure before adding a browser back.
+#   * ⚠ Worse, the checkpoint page embeds a UNIQUE REQUEST ID per fetch
+#     (`sfo1::1785830911-…`). Point a watch at it and every single check "changes" —
+#     a permanent false-alert generator.
+#   * The API host `app.checkvisaslots.com` is NOT challenge-gated: it answers 200 with
+#     clean JSON from the very same Dell IP that the HTML page blocks. That is expected
+#     — the extension is itself a non-browser fetch client and cannot solve a JS
+#     challenge either.
+# Net: watch the API, not the page. No Chrome, no `shm_size: 2gb`, no SYS_ADMIN
+# capability on a 7.5 GB node.
 #
-# ⚠ THE SITE RATE-LIMITS: rapid rechecks earn `HTTP error code 429 (Access denied or
-# blocked)`. At the 5-minute interval below this is not hit; hammering the recheck
-# button is what triggers it. changedetection keeps the last good snapshot and retries
-# on the next cycle, so an occasional 429 is self-healing — do not "fix" it by adding
-# retries or a browser.
+# ⚠⚠ THE ENDPOINT IS QUOTA-METERED — this drives the poll interval, not politeness.
+# Every call decrements `userActivity.remaining` by exactly 1 (measured: 412 → 411 →
+# 410) and increments `userActivity.slots`; the two sum to a fixed allowance. The reset
+# period is NOT known, so the interval below is deliberately conservative:
+#     5 min  = 288 calls/day     15 min = 96 calls/day     60 min = 24 calls/day
+# The operator's own browser extension draws on the SAME allowance, so the real burn is
+# higher than this stack alone. Check the balance any time with a single call:
+#   curl -s https://app.checkvisaslots.com/slots/v3 -H "x-api-key: $CHECKVISASLOTS_API_KEY" \
+#     -H "origin: chrome-extension://beepaenfejnphdgnkmccjcfiieihhogl" | jq .userActivity
 #
 # WATCHES LIVE IN THE DATASTORE, NOT IN GIT — the one honest gap versus the rest of the
-# fleet. changedetection has no declarative config file; watches, filters and
-# notification URLs are created in the UI and persist in changedetection-data. Treat
-# that volume as real state and keep the recipe below written down.
+# fleet. changedetection has no declarative config file; watches, filters, request
+# headers and notification URLs are created in the UI and persist in
+# changedetection-data. Treat that volume as real state and keep the recipe below.
 #
 # THE VISA WATCH (configure once in the UI — full walkthrough in the runbook):
-#   URL           https://checkvisaslots.com/latest-us-visa-availability/h-4-regular/
+#   URL           https://app.checkvisaslots.com/slots/v3
 #   Fetcher       Basic fast Plaintext/HTTP Client  (NOT a browser — see above)
-#   Filter        td:nth-child(-n+5)
-#   Trigger       "Send notification when filter text CHANGES"
+#   Headers       x-api-key: <CHECKVISASLOTS_API_KEY>
+#                 origin: chrome-extension://beepaenfejnphdgnkmccjcfiieihhogl
+#                 extversion: 4.7.3
+#                 user-agent: <a normal desktop Chrome UA>
+#   Filter        jq:[.slotDetails[] | select(.slots > 0) | "\(.visa_location): \(.slots)"]
+#                    | if length == 0 then "none" else join(" | ") end
+#   Trigger text  /: [1-9]/
 #   Notification  ntfy://<NTFY_VISA_TOKEN>@ntfy/visa
-#   Interval      5 minutes
+#   Interval      15 minutes  (quota — see above)
 #
-# WHY THAT FILTER — the page has exactly ONE table, 7 columns:
-#   1 Visa Location · 2 Visa Type · 3 Earliest Date · 4 Slots on Earliest Date
-#   5 Total Dates Available · 6 Last Seen At · 7 Relative Time
-# Columns 6-7 are CHURN: "29 mins ago" re-renders on every single load, and the page
-# also stamps "The current info is generated at <now>". Watch the raw page and it
-# alerts every 5 minutes forever while meaning nothing. `td:nth-child(-n+5)` keeps only
-# columns 1-5, so "the text changed" reduces to "a location's earliest date or slot
-# count actually moved" — which is the alert you want. Dropping column 6 also means no
-# alert when the SAME availability is merely re-confirmed.
+# ALERT ONLY ON AVAILABILITY — two mechanisms, both load-bearing:
+#   * `select(.slots > 0)` means the snapshot lists ONLY locations that actually have
+#     slots; with nothing available it collapses to the literal "none". The
+#     `if length == 0` guard matters: an EMPTY filter result makes changedetection error
+#     with "no filters were found" rather than record a clean empty state.
+#   * `trigger_text` = /: [1-9]/ suppresses the notification unless the new snapshot has
+#     a non-zero count — otherwise a slot DISAPPEARING ("CHENNAI VAC: 2" -> "none") also
+#     pages you, which is noise.
+# Verified both ways on deploy: all-zeros sent nothing; a "CHENNAI VAC: 3" snapshot fired.
+#
+# WHY THAT FILTER — the raw JSON is mostly CHURN. Each slotDetails entry carries a
+# `createdon` timestamp and an `imghash` that both change on every poll, and the
+# top-level `userActivity.remaining` counts DOWN on every call. Watch the raw body and
+# it alerts every cycle forever while meaning nothing. The jq expression reduces the
+# whole response to one line of pure signal:
+#   "CHENNAI VAC: 0 | HYDERABAD VAC: 0 | KOLKATA VAC: 0 | MUMBAI VAC: 0 | NEW DELHI VAC: 0"
+# so "the text changed" reduces to "a location's slot count moved, or a location
+# appeared/disappeared" — which is exactly the alert worth waking up for.
+#
+# The response also carries `userDetails.visa_type` / `appointment_type`: the API key is
+# already scoped to the subscriber's visa type, so there is no per-type URL to vary —
+# a different visa type means a different key, not a different endpoint.
 #
 # LAN/TAILNET-ONLY: the dashboard is an unauthenticated request-forwarder by default,
 # so it is gated by an ipAllowList (LAN + tailnet), same posture as wud/headplane. The

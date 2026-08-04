@@ -217,3 +217,13 @@ RESUME_AUTH_SECRET = "changeme-resume-auth-secret-64hex"
 RESUME_POSTGRES_PASSWORD = "changeme-resume-postgres-password-64hex"
 # At-rest crypto for saved AI providers in the optional /agent workspace.
 RESUME_ENCRYPTION_SECRET = "changeme-resume-encryption-secret-64hex"
+
+# CheckVisaSlots API key — the per-user key their browser EXTENSION sends. The watch reads
+# their authenticated JSON endpoint (app.checkvisaslots.com/slots/v3), NOT the public HTML
+# page, which sits behind Vercel Attack Challenge Mode. Get it from the extension popup:
+# DevTools -> Network -> the XHR -> Copy as cURL, and take the x-api-key header value.
+# Pasted by hand into the changedetection watch's "Request headers" box (it lives in the
+# datastore, never in a tracked file) — so this is NOT forwarded to Periphery.
+# ⚠ The endpoint is QUOTA-METERED: every call decrements userActivity.remaining by 1, and
+# your own browser extension draws on the SAME allowance. See docs/runbooks/alerting.md.
+CHECKVISASLOTS_API_KEY = "changeme-checkvisaslots-extension-api-key"
