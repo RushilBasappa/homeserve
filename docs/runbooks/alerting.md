@@ -282,6 +282,46 @@ openings". This gets you the alert; booking is still a manual race. Auto-booking
 the government site is where the real ToS and account-lockout risk lives, and is
 deliberately not built here.
 
+## Second watch — PERM case prediction
+
+Same pattern, different source; proof the stack isn't visa-specific. It watches
+permupdate.com's backend for a single PERM case.
+
+| Field | Value |
+|---|---|
+| **URL** | `https://perm-backend-production.up.railway.app/api/predictions/from-date` |
+| **Method** | `POST` |
+| **Body** | `{"submit_date":"2025-09-30","employer_first_letter":"S","case_number":"G-100-25273-347868"}` |
+| **Headers** | `content-type: application/json`, `origin: https://permupdate.com`, `referer: https://permupdate.com/` |
+| **Filter** | `jq:"Remaining: \(.remaining_days) days \| Est completion: \(.estimated_completion_date) \| Upper bound: \(.upper_bound_date)"` |
+| **Notification URL** | `ntfy://<NTFY_VISA_TOKEN>@ntfy/perm` |
+
+It publishes to its **own topic** (`perm`), so the two alert streams mute independently
+on the phone. `visabot` was granted write on it:
+
+```bash
+docker exec ntfy ntfy access visabot perm wo
+```
+
+**Churn here too.** `request_id` differs on every call and the whole `queue_analysis`
+block (backlog, queue position, processing rates) moves constantly — watch the raw body
+and it alerts every cycle. The filter keeps only what represents a real change:
+
+```
+"Remaining: 28 days | Est completion: 2026-09-01 | Upper bound: 2026-09-05"
+```
+
+⚠ `remaining_days` counts down by one each day, so expect roughly **one notification per
+day** even when nothing meaningful moved. If that's noise, drop `remaining_days` from the
+filter — the two dates only move when the prediction genuinely shifts.
+
+**Cadence:** both watches share the :00/:30 schedule, because the scheduler rechecks every
+non-paused watch. Fine here — the PERM filter only changes daily, so polling faster costs
+a few cheap requests and buys lower latency. Unlike the visa endpoint, this one is **not
+quota-metered**.
+
+---
+
 ## Adding another publisher
 
 ntfy is generic. To alert from anything else, mint a scoped user + token the same way:

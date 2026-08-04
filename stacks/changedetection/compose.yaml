@@ -77,6 +77,33 @@
 # already scoped to the subscriber's visa type, so there is no per-type URL to vary —
 # a different visa type means a different key, not a different endpoint.
 #
+# ---------------------------------------------------------------------------------
+# SECOND WATCH — PERM case prediction (permupdate.com's backend). Same pattern, and a
+# useful demonstration that this stack is not visa-specific.
+#   URL           https://perm-backend-production.up.railway.app/api/predictions/from-date
+#   Method        POST  (changedetection supports a method + body per watch)
+#   Body          {"submit_date":"…","employer_first_letter":"…","case_number":"…"}
+#   Headers       content-type: application/json
+#                 origin: https://permupdate.com   referer: https://permupdate.com/
+#   Filter        jq:"Remaining: \(.remaining_days) days | Est completion:
+#                    \(.estimated_completion_date) | Upper bound: \(.upper_bound_date)"
+#   Notification  ntfy://<NTFY_VISA_TOKEN>@ntfy/perm     ← its OWN topic, so the two
+#                 alert streams can be muted independently on the phone.
+#
+# CHURN HERE TOO: the response's `request_id` is different on EVERY call, and the whole
+# `queue_analysis` block (backlog, queue position, processing rates) moves constantly.
+# Watch the raw body and it alerts every cycle. The jq expression keeps only the three
+# fields that represent an actual change in the prediction:
+#   "Remaining: 28 days | Est completion: 2026-09-01 | Upper bound: 2026-09-05"
+# ⚠ `remaining_days` counts DOWN by one each day, so expect roughly ONE notification per
+# day even when nothing meaningful moved. If that is noise, drop `remaining_days` from
+# the filter — the two dates only change when the prediction genuinely shifts.
+#
+# BOTH WATCHES SHARE THE :00/:30 CADENCE (the scheduler rechecks every non-paused watch).
+# That is fine here: the PERM filter only changes ~daily, so polling faster costs a few
+# cheap requests and buys lower latency. If a future watch genuinely needs a different
+# cadence, filter by tag in the scheduler rather than adding a second one.
+#
 # LAN/TAILNET-ONLY: the dashboard is an unauthenticated request-forwarder by default,
 # so it is gated by an ipAllowList (LAN + tailnet), same posture as wud/headplane. The
 # ALERTS still reach the phone from anywhere — those go out through ntfy, which is
