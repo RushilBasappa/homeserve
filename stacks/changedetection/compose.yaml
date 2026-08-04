@@ -71,16 +71,11 @@ services:
       # fetcher dropdown has no browser option and the visa watch gets the Vercel
       # challenge page instead of the table.
       #
-      # ⚠ The `?--flag` query params are passed through to Chrome, and the GPU ones
-      # are LOAD-BEARING, not tuning. There is no GPU in this container, and Chrome
-      # aborts the whole page load with
-      #   GPU process launch failed: error_code=1002
-      #   [FATAL:gpu_data_manager_impl_private.cc] GPU process isn't usable. Goodbye.
-      # The fetch then "succeeds" having captured only the pre-hydration HTML shell
-      # (~19 bytes of text), so the filter matches nothing and the watch silently
-      # never fires. Symptom to recognise: "no filters were found" plus a blank,
-      # unstyled last-screenshot.png.
-      PLAYWRIGHT_DRIVER_URL: ws://sockpuppetbrowser:3000?--disable-gpu=true&--disable-software-rasterizer=true
+      # NOTE: sockpuppetbrowser already passes --disable-gpu and --no-sandbox itself,
+      # so no `?--flag` query params are needed here. The `GPU process isn't usable.
+      # Goodbye.` lines in its log are SHUTDOWN NOISE (they appear after "Killing N
+      # Chrome child processes"), not a fetch failure — don't chase them.
+      PLAYWRIGHT_DRIVER_URL: ws://sockpuppetbrowser:3000
       # Don't leak this instance's URL as a Referer to the sites being watched.
       HIDE_REFERER: "true"
       # Concurrent fetch workers — keep low: each browser fetch is a Chrome tab.
@@ -136,6 +131,15 @@ services:
       SCREEN_DEPTH: "16"
       # Reap abandoned tabs so a hung fetch can't leak a Chrome process forever.
       MAX_CONCURRENT_CHROME_PROCESSES: "4"
+      # ⚠ HEADFUL under a virtual X server, not headless. The visa page is behind a
+      # Vercel bot challenge that serves a stripped, unhydrated shell to headless
+      # Chrome: the fetch "succeeds" with ~19 bytes of text, the filter matches
+      # nothing, and the watch silently never fires. The SAME chromium binary in
+      # this container renders the page fully (582 KB DOM) when not headless — so
+      # the browser is fine, the headless fingerprint is what gets degraded.
+      # The image's entrypoint starts Xvfb on :99 when either of these is set.
+      CHROME_HEADFUL: "true"
+      ENABLE_XVFB: "true"
     networks:
       - browser
 
