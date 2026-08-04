@@ -187,7 +187,7 @@ key, not a different URL). Store it as `CHECKVISASLOTS_API_KEY` in `.mise.toml`.
 | **Filter** | `jq:[.slotDetails[] \| select(.slots > 0) \| "\(.visa_location): \(.slots)"] \| if length == 0 then "none" else join(" \| ") end` |
 | **Trigger → Trigger/wait for text** | `/: [1-9]/` |
 | **Notification URL** | `ntfy://<NTFY_VISA_TOKEN>@ntfy/visa` |
-| **Recheck time** | 30 minutes — **quota-bound, see below** |
+| **Recheck time** | driven externally at **:00 / :30** — see [scheduling](#scheduling-on-the-half-hour) |
 
 ### Alert only on availability, never on a countdown
 
@@ -205,6 +205,35 @@ Verified in both directions on deploy: all-zeros produced **no** notification, a
 snapshot of `"CHENNAI VAC: 3"` fired one. Note that with `trigger_text` set, changedetection
 does not advance the stored snapshot on non-triggering checks either — so the diff in the
 alert is against the last *triggering* state, which is what you want.
+
+### Scheduling on the half hour
+
+changedetection has **no cron**. `time_between_check` is a plain interval measured from
+the *last* check, so the phase lands wherever the previous run finished and then drifts
+by the fetch duration every cycle (~0.3 s per check — minutes per month).
+`time_schedule_limit` is only a day/time **window** limiter ("only check 09:00–17:00");
+it cannot pin checks to :00 and :30.
+
+So alignment is driven from outside, by the **`changedetection-scheduler`** sidecar in
+the stack: it sleeps to the next multiple of 1800 s, then pokes the recheck API for every
+non-paused watch. It reads changedetection's own API token out of the datastore (mounted
+read-only), so no secret enters git or the Periphery env, and it reuses the app image
+rather than pulling a second one.
+
+```bash
+docker logs changedetection-scheduler     # "scheduler up; first recheck at 02:00:00"
+```
+
+⚠ **The watch's own interval is a FALLBACK only** — set to 6 h with
+`time_between_check_use_default: false`. The sidecar refreshes `last_checked` every 30
+min so that 6 h timer never elapses; it only takes over if the sidecar dies. **Do not
+also set the watch to 30 min** — both would fire and double the quota burn.
+
+⚠ **`time_between_check_use_default` is a trap.** It defaults to `true`, which makes the
+**global** interval win and silently ignores the per-watch value. The global here is
+**3 hours**, so a watch that reads "30 minutes" in its own config was really checking
+every 3 h until the flag was cleared. Always verify the effective interval in
+`/datastore/<uuid>/watch.json`, not just the form.
 
 ### ⚠ The endpoint is quota-metered
 
