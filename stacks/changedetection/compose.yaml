@@ -131,6 +131,79 @@ services:
       - "traefik.http.middlewares.changedetection-lan.ipallowlist.sourcerange=10.0.0.0/24,100.64.0.0/10,127.0.0.1/32"
       - "traefik.http.services.changedetection.loadbalancer.server.port=5000"
 
+  # WALL-CLOCK SCHEDULER — fires rechecks at :00 and :30 exactly.
+  #
+  # WHY THIS EXISTS: changedetection has NO cron. Its `time_between_check` is a plain
+  # interval measured from the LAST check, so the phase lands wherever the previous run
+  # happened to finish and then drifts by the fetch duration every cycle. Its
+  # `time_schedule_limit` is only a day/time WINDOW limiter ("only check 09:00-17:00") —
+  # it cannot pin checks to the half hour. So the alignment is driven from outside.
+  #
+  # HOW: sleep to the next multiple of 1800s, then POKE the recheck API. Because this
+  # updates `last_checked` every 30 min, the watch's own interval never elapses — it is
+  # left as a LONG fallback (see the runbook) purely so checks continue if this sidecar
+  # dies. Do NOT also set the watch to 30 min: both would fire and DOUBLE the quota burn
+  # on a metered endpoint.
+  #
+  # NO SECRET IN GIT: it reads changedetection's own API token out of the shared
+  # datastore (mounted READ-ONLY) at runtime, so nothing is added to .mise.toml or the
+  # Periphery env. Reuses the app's own image — python3 for real JSON parsing, and no
+  # second image to pull or track.
+  #
+  # ⚠ It rechecks EVERY non-paused watch. Today that is only the visa watch; if a future
+  # watch wants a different cadence, filter by tag here rather than adding a second
+  # scheduler.
+  changedetection-scheduler:
+    image: dgtlmoon/changedetection.io:0.55.8
+    container_name: changedetection-scheduler
+    restart: unless-stopped
+    depends_on:
+      - changedetection
+    environment:
+      TZ: America/Los_Angeles
+    volumes:
+      # READ-ONLY: this container only ever reads the API token out of the datastore.
+      - changedetection-data:/datastore:ro
+    networks:
+      - traefik
+    entrypoint: ["python3", "-u", "-c"]
+    command:
+      - |
+        import json, time, datetime, urllib.request
+        BASE = "http://changedetection:5000"
+        DS   = "/datastore/changedetection.json"
+
+        def token():
+            with open(DS) as fh:
+                return json.load(fh)["settings"]["application"]["api_access_token"]
+
+        def call(path, key):
+            req = urllib.request.Request(BASE + path, headers={"x-api-key": key})
+            return json.load(urllib.request.urlopen(req, timeout=30))
+
+        def stamp(ts):
+            return datetime.datetime.fromtimestamp(ts).strftime("%H:%M:%S")
+
+        nxt = (int(time.time()) // 1800 + 1) * 1800
+        print("scheduler up; first recheck at " + stamp(nxt))
+        while True:
+            now = time.time()
+            nxt = (int(now) // 1800 + 1) * 1800
+            time.sleep(max(1.0, nxt - now))
+            try:
+                key = token()
+                watches = call("/api/v1/watch", key)
+                fired = 0
+                for uuid, w in watches.items():
+                    if w.get("paused"):
+                        continue
+                    call("/api/v1/watch/" + uuid + "?recheck=1", key)
+                    fired += 1
+                print(stamp(time.time()) + " rechecked " + str(fired) + " watch(es)")
+            except Exception as exc:
+                # Never die: a transient failure must not silently end the schedule.
+                print(stamp(time.time()) + " scheduler error: " + repr(exc))
+
 volumes:
   # Local named volume on the Dell (golden rule: state → the Dell).
   changedetection-data:
