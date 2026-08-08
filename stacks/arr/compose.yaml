@@ -32,7 +32,7 @@
 services:
   # --- Proton egress + killswitch (the tunnel every torrent rides) -------------
   gluetun:
-    image: qmcgaw/gluetun:v3.41.1
+    image: qmcgaw/gluetun:v3.41.3
     container_name: gluetun
     restart: unless-stopped
     cap_add:
