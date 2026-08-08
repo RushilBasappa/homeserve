@@ -78,7 +78,7 @@ services:
   # cannot clobber live config. Written out flat (no shell loop/variables) so nothing in the
   # command can collide with Compose's `$`-interpolation.
   homeassistant-init:
-    image: alpine:3.22
+    image: alpine:3.24
     container_name: homeassistant-init
     restart: "no"
     configs:
@@ -100,7 +100,7 @@ services:
 
   # --- the hub ------------------------------------------------------------------------------
   homeassistant:
-    image: ghcr.io/home-assistant/home-assistant:2026.7.4
+    image: ghcr.io/home-assistant/home-assistant:2026.8.1
     container_name: homeassistant
     restart: unless-stopped
     depends_on:

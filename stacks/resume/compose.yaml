@@ -37,7 +37,7 @@
 services:
   # --- the Reactive Resume server (the only routed service; self-migrates on boot) --------
   app:
-    image: ghcr.io/amruthpillai/reactive-resume:v5.2.3
+    image: ghcr.io/amruthpillai/reactive-resume:v5.2.5
     container_name: resume
     restart: unless-stopped
     environment:
