@@ -105,7 +105,7 @@ services:
 
   # --- Redis (optional /agent AI workspace queue) -------------------------------------------
   redis:
-    image: redis:7-alpine
+    image: redis:8-alpine
     container_name: resume-redis
     restart: unless-stopped
     command: redis-server --appendonly yes
