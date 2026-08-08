@@ -138,7 +138,7 @@ services:
 
   # --- Redis (Django cache + Celery broker/backend) ----------------------------------------
   cache:
-    image: docker.io/redis:7-alpine
+    image: docker.io/redis:8-alpine
     container_name: wger-cache
     restart: unless-stopped
     volumes:
