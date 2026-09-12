@@ -32,7 +32,7 @@
 services:
   # --- Proton egress + killswitch (the tunnel every torrent rides) -------------
   gluetun:
-    image: qmcgaw/gluetun:v3.41.1
+    image: qmcgaw/gluetun:v3.41.3
     container_name: gluetun
     restart: unless-stopped
     cap_add:
@@ -196,7 +196,7 @@ services:
 
   # --- Archive extraction (no UI; talks to the PVRs on the arr network) --------
   unpackerr:
-    image: golift/unpackerr:0.15.2
+    image: golift/unpackerr:v0.16.1
     container_name: unpackerr
     restart: unless-stopped
     environment:

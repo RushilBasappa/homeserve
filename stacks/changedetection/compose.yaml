@@ -117,7 +117,7 @@
 
 services:
   changedetection:
-    image: dgtlmoon/changedetection.io:0.55.8
+    image: dgtlmoon/changedetection.io:0.60.4
     container_name: changedetection
     restart: unless-stopped
     environment:
@@ -181,7 +181,7 @@ services:
   # watch wants a different cadence, filter by tag here rather than adding a second
   # scheduler.
   changedetection-scheduler:
-    image: dgtlmoon/changedetection.io:0.55.8
+    image: dgtlmoon/changedetection.io:0.60.4
     container_name: changedetection-scheduler
     restart: unless-stopped
     depends_on:
