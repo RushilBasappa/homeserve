@@ -27,7 +27,7 @@
 
 # --- Shared config for the three app services (web + celery worker + beat) --------------------
 x-wger-app: &wger-app
-  image: docker.io/wger/server:2.6.0   # VERIFY/BUMP at deploy — never :latest
+  image: docker.io/wger/server:2.7.0   # VERIFY/BUMP at deploy — never :latest
   restart: unless-stopped
   env_file:
     - config/prod.env
