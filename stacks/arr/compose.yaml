@@ -76,7 +76,7 @@ services:
 
   # --- Download client (all traffic pinned inside gluetun's tunnel) ------------
   qbittorrent:
-    image: lscr.io/linuxserver/qbittorrent:5.2.3
+    image: lscr.io/linuxserver/qbittorrent:20.04.1
     container_name: qbittorrent
     restart: unless-stopped
     # SHARE gluetun's netns → qBit has no egress except through Proton (killswitch).
