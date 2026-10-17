@@ -31,7 +31,7 @@
 
 services:
   basic-memory:
-    image: ghcr.io/basicmachines-co/basic-memory:0.22.1
+    image: ghcr.io/basicmachines-co/basic-memory:0.23.2
     container_name: basic-memory
     restart: unless-stopped
     # Override the image's default (SSE) → streamable-http at /mcp on :8000.

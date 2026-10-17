@@ -17,7 +17,7 @@
 
 services:
   wud:
-    image: ghcr.io/getwud/wud:8.3.0
+    image: ghcr.io/getwud/wud:8.4.0
     container_name: wud
     restart: unless-stopped
     environment:
